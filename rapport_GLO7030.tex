@@ -1,0 +1,410 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% ---------------------------------------------------------------
+% Packages
+% ---------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{multirow}
+
+% ---------------------------------------------------------------
+% Titre et auteurs
+% ---------------------------------------------------------------
+\title{Exploration d'architectures neuronales profondes pour l'évaluation du risque ordinal}
+
+\author{
+  \IEEEauthorblockN{Noé Cochet}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  noe-pierre.cochet.1@ulaval.ca}
+  \and
+  \IEEEauthorblockN{Théo Fornier}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  theo.fornier.1@ulaval.ca}
+  \and
+  \IEEEauthorblockN{Bilal Kefif}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  bilal.kefif.1@ulaval.ca}
+  \and
+  \IEEEauthorblockN{Étienne Plante-Dubé}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  etienne.plante-dube.1@ulaval.ca}
+  \and
+  \IEEEauthorblockN{Jean-Simon Ratté}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  jean-simon.ratte.1@ulaval.ca}
+  }
+
+\begin{document}
+
+\maketitle
+
+% ---------------------------------------------------------------
+% Résumé
+% ---------------------------------------------------------------
+\begin{abstract}
+% TODO : Rédiger le résumé en dernier, une fois les résultats obtenus.
+% Environ 150–250 mots. Doit couvrir : contexte, problème, approche, résultats principaux, conclusion.
+Ce travail explore l'application de méthodes d'apprentissage profond récentes au problème de
+classification ordinale du risque en assurance-vie, en utilisant le jeu de données
+\textit{Prudential Life Insurance Assessment}. Ce dataset tabulaire de 128 variables présente
+un défi représentatif d'un domaine traditionnellement dominé par les méthodes de
+\textit{gradient boosting}. Nous comparons des modèles de référence basés sur XGBoost,
+LightGBM et CatBoost à des architectures d'apprentissage profond récentes conçues pour les
+données tabulaires, notamment TabPFN-2.5, TabM et TabDPT. Plusieurs variantes
+expérimentales sont étudiées~: utilisation de données non étiquetées par pseudo-étiquetage,
+régularisation (Dropout, Batch Normalization, Weight Decay), et une approche
+\textit{teacher--student} pour l'augmentation tabulaire synthétique. Une étude d'ablation
+permet d'isoler la contribution des composantes clés de l'architecture sélectionnée.
+Les résultats montrent que \textbf{[RÉSUMÉ DES RÉSULTATS À COMPLÉTER]}.
+\end{abstract}
+
+\begin{IEEEkeywords}
+apprentissage profond, données tabulaires, classification ordinale, assurance-vie, semi-supervisé, transformer, gradient boosting
+\end{IEEEkeywords}
+
+% ---------------------------------------------------------------
+% 1. Introduction
+% ---------------------------------------------------------------
+\section{Introduction}
+
+L'évaluation du risque lors de la souscription en assurance-vie repose traditionnellement sur des longs questionnaires médicaux afin de éter. Depuis quelques années, les assureurs ont introduit des algorithmes de machine learning sur les questionnaires médicaux afin de réduire les commandes d'exigence médicales tout en minimisant le risque additionnel de mortalité.
+notation complexes intégrant de nombreuses variables médicales, comportementales et
+démographiques. Ce processus, qui vise à attribuer une classe de risque ordinal à chaque
+client, constitue un problème de classification ordinale à huit niveaux.
+
+Sur ce type de données tabulaires structurées, les méthodes de \textit{gradient boosting}
+telles que XGBoost~\cite{chen2016xgboost}, LightGBM~\cite{ke2017lightgbm} et CatBoost~\cite{prokhorenkova2018catboost} demeurent l'état de l'art. Pourtant, l'essor récent
+d'architectures de réseaux de neurones profonds conçues spécifiquement pour les données
+tabulaires, comme les Transformers tabulaires et les modèles de fondation, laisse
+entrevoir un potentiel compétitif croissant.
+
+Ce projet réalisé dans le cadre du cours GLO-7030 vise à évaluer dans quelle
+mesure les avancées récentes en apprentissage profond peuvent rivaliser avec  les
+modèles de boosting classiques sur un problème réel de risque de mortalité en assurance-vie. Notre objectif principal est de comparer les architectures modernes d'apprentissage profond sur des données tabulaires (TabPFN-2.5, TabM, TabDPT) combinée à une étude d'ablation sur les composantes d'entraînement, ainsi qu'une
+exploration de stratégies semi-supervisées et d'augmentation de données synthétiques.
+
+La suite de ce rapport est organisée comme suit~: la Section~\ref{sec:etat_art} présente
+l'état de l'art; la Section~\ref{sec:approche} décrit l'approche proposée; la
+Section~\ref{sec:methodo} détaille la méthodologie et les expérimentations; la
+Section~\ref{sec:resultats} présente et discute les résultats; la Section~\ref{sec:conclusion}
+conclut le rapport.
+
+% ---------------------------------------------------------------
+% 2. État de l'art
+% ---------------------------------------------------------------
+\section{État de l'art}
+\label{sec:etat_art}
+
+\subsection{Gradient Boosting pour les données tabulaires}
+
+Les méthodes de \textit{gradient boosting} constituent depuis plusieurs années l'approche
+dominante pour les tâches d'apprentissage supervisé sur données tabulaires. XGBoost~\cite{chen2016xgboost}
+introduit un cadre d'optimisation scalable avec régularisation L1/L2 intégrée. LightGBM~\cite{ke2017lightgbm}
+améliore l'efficacité computationnelle grâce à une construction d'arbres feuille par feuille
+et un échantillonnage par gradient. CatBoost~\cite{prokhorenkova2018catboost} propose un
+traitement natif des variables catégorielles via un encodage ordonné.
+
+\subsection{Apprentissage profond sur des données tabulaires}
+
+Plusieurs travaux récents ont tenté de combler l'écart de performance entre réseaux de
+neurones et méthodes de boosting sur les données tabulaires~\cite{grinsztajn2022tree}.
+
+\subsubsection{Modèles de fondation tabulaires}
+TabPFN~\cite{hollmann2022tabpfn} est un modèle de fondation \textit{prior-fitted} entraîné
+sur des millions de jeux de données synthétiques, permettant une inférence en contexte sans
+réentraînement. La version 2.5 étendue améliore la scalabilité et la gestion de la haute
+dimensionnalité~\cite{hollmann2025tabpfn2}.
+
+\subsubsection{Approches d'ensemble et de mélange d'experts}
+TabM~\cite{gorishniy2024tabm} combine des réseaux MLP avec un mécanisme de mélange
+d'experts pondérés pour mieux capturer les interactions entre variables.
+
+\subsubsection{Transformers semi-supervisés}
+TabDPT~\cite{tabdpt2024} adapte l'architecture Transformer à l'apprentissage tabulaire semi-supervisé,
+exploitant des données non étiquetées pour améliorer les représentations apprises.
+
+\subsection{Classification ordinale}
+
+La prédiction d'une variable cible ordonnée nécessite des ajustements par rapport à la
+classification multiclasse standard. Parmi les approches courantes figurent la
+\textit{ordinal regression}~\cite{frank2001simple}, la décomposition en classifieurs
+binaires cumulatifs, et les fonctions de perte tenant compte de l'ordre (ex.~: \textit{Earth
+Mover's Distance}, loss d'ordonnancement)~\cite{TODO}.
+
+\subsection{Apprentissage semi-supervisé et augmentation tabulaire}
+
+L'apprentissage semi-supervisé pour les données tabulaires peut prendre la forme de
+pseudo-étiquetage~\cite{lee2013pseudo} ou de pré-entraînement par auto-encodage~\cite{TODO}.
+L'approche \textit{teacher--student}~\cite{hinton2015distilling} a montré son efficacité pour
+transférer la connaissance d'un modèle supervisé vers un modèle entraîné sur des données
+synthétiques ou non étiquetées.
+
+% ---------------------------------------------------------------
+% 3. Approche proposée
+% ---------------------------------------------------------------
+\section{Approche proposée}
+\label{sec:approche}
+
+\subsection{Vue d'ensemble}
+
+Notre approche suit un cadre comparatif structuré en deux volets~: (1) l'établissement de
+lignes de base avec des modèles de \textit{gradient boosting}, et (2) l'exploration
+d'architectures d'apprentissage profond récentes adaptées aux données tabulaires, avec
+plusieurs variantes expérimentales.
+
+\subsection{Description du jeu de données}
+
+Le jeu de données \textit{Prudential Life Insurance Assessment}~\cite{kaggle_prudential}
+est composé de \textbf{[N\_TRAIN]} exemples d'entraînement et \textbf{[N\_TEST]} exemples
+de test, chacun décrit par 128 variables incluant des caractéristiques médicales, comportementales
+et démographiques. La variable cible \texttt{Response} prend 8 valeurs ordinales ($1$ à $8$).
+La distribution des classes est \textbf{[DÉCRIRE DÉSÉQUILIBRE]}.
+
+Les variables peuvent être regroupées en~:
+\begin{itemize}
+  \item Variables continues (ex.~: \texttt{Ht}, \texttt{Wt}, \texttt{BMI})~;
+  \item Variables catégorielles à haute cardinalité (ex.~: \texttt{Product\_Info\_2})~;
+  \item Variables binaires médicales (ex.~: \texttt{Medical\_History\_*})~;
+  \item Variables avec valeurs manquantes (ex.~: \texttt{Employment\_Info\_*}).
+\end{itemize}
+
+\subsection{Prétraitement}
+
+\textbf{[DÉCRIRE LE PRÉTRAITEMENT]} : normalisation, encodage des variables catégorielles
+(ex.~: ordinal encoding, target encoding, embeddings), imputation des valeurs manquantes,
+gestion des variables fortement corrélées.
+
+\subsection{Modèles de référence (\textit{Gradient Boosting})}
+
+Nous entraînons trois modèles de référence avec optimisation des hyperparamètres par
+validation croisée~:
+\begin{itemize}
+  \item \textbf{XGBoost}~\cite{chen2016xgboost}~: \textbf{[HYPERPARAMÈTRES CLÉS]}~;
+  \item \textbf{LightGBM}~\cite{ke2017lightgbm}~: \textbf{[HYPERPARAMÈTRES CLÉS]}~;
+  \item \textbf{CatBoost}~\cite{prokhorenkova2018catboost}~: \textbf{[HYPERPARAMÈTRES CLÉS]}.
+\end{itemize}
+
+\subsection{Architectures d'apprentissage profond}
+
+\subsubsection{TabPFN-2.5}
+\textbf{[DÉCRIRE L'UTILISATION DE TABPFN-2.5]} : configuration, adaptation au problème
+ordinal, limites de scalabilité rencontrées.
+
+\subsubsection{TabM}
+\textbf{[DÉCRIRE L'ARCHITECTURE TABM]} : nombre de couches, dimension des embeddings,
+mécanisme de mélange d'experts utilisé.
+
+\subsubsection{TabDPT}
+\textbf{[DÉCRIRE L'UTILISATION DE TABDPT]} : exploitation des données non étiquetées,
+stratégie de pré-entraînement.
+
+\subsection{Gestion de l'ordinalité}
+
+Pour adapter les modèles de Deep Learning à la nature ordinale de la cible, nous utilisons
+\textbf{[DÉCRIRE STRATÉGIE~: ex.~ordinal regression, coral loss, EMD loss, etc.]}.
+
+% ---------------------------------------------------------------
+% 4. Méthodologie et expérimentation
+% ---------------------------------------------------------------
+\section{Méthodologie et expérimentation}
+\label{sec:methodo}
+
+\subsection{Protocole d'évaluation}
+
+Tous les modèles sont évalués selon les métriques suivantes~:
+\begin{itemize}
+  \item \textbf{Cohen's Kappa quadratique pondéré (QWK)}~: métrique principale du concours Kaggle~;
+  \item \textbf{Accuracy}~: taux de classification exacte~;
+  \item \textbf{MAE ordinal}~: erreur absolue moyenne sur les niveaux de risque.
+\end{itemize}
+
+Nous utilisons une validation croisée stratifiée à $k=5$ plis pour tous les modèles supervisés.
+Les résultats sur le jeu de test Kaggle sont obtenus via soumission.
+
+\subsection{Détails d'entraînement}
+
+\textbf{[COMPLÉTER POUR CHAQUE MODÈLE]}~:
+\begin{itemize}
+  \item Matériel utilisé (GPU/CPU, mémoire)~;
+  \item Optimiseur (ex.~: Adam, AdamW), taux d'apprentissage, scheduler~;
+  \item Nombre d'époques, \textit{early stopping}~;
+  \item Taille de lot (\textit{batch size})~;
+  \item Initialisation des poids.
+\end{itemize}
+
+\subsection{Variantes expérimentales}
+
+\subsubsection{Expérience 1 : Comparaison des modèles de base}
+Comparaison directe de tous les modèles dans leur configuration standard sur les données
+d'entraînement avec prétraitement minimal.
+
+\subsubsection{Expérience 2 : Régularisation}
+Évaluation de l'impact de différentes techniques de régularisation sur le modèle DL retenu~:
+Dropout ($p \in \{0.1, 0.3, 0.5\}$), Batch Normalization, Weight Decay
+($\lambda \in \{10^{-4}, 10^{-3}, 10^{-2}\}$).
+
+\subsubsection{Expérience 3 : Utilisation des données non étiquetées}
+Exploitation des données de test (sans étiquettes) via pseudo-étiquetage et/ou pré-entraînement
+par auto-encodage pour améliorer les représentations apprises.
+
+\subsubsection{Expérience 4 : Approche \textit{Teacher--Student} avec augmentation synthétique}
+Un modèle enseignant (\textit{teacher}) entraîné sur les données réelles génère des
+pseudo-étiquettes sur un grand volume de données synthétiques. Le modèle élève (\textit{student})
+est pré-entraîné sur ces données augmentées, puis affiné (\textit{fine-tuned}) sur les données
+originales.
+
+\subsubsection{Expérience 5 : Étude d'ablation}
+Isolation de la contribution des composantes clés~: embeddings d'entrée, normalisation,
+mécanisme d'attention, pré-entraînement. \textbf{[DÉCRIRE LES ABLATIONS RETENUES]}.
+
+% ---------------------------------------------------------------
+% 5. Résultats et Discussion
+% ---------------------------------------------------------------
+\section{Résultats et Discussion}
+\label{sec:resultats}
+
+\subsection{Comparaison globale des modèles}
+
+\begin{table}[htbp]
+\caption{Comparaison des performances des modèles sur la validation croisée ($k=5$)}
+\label{tab:resultats_globaux}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Modèle} & \textbf{QWK} & \textbf{Accuracy} & \textbf{MAE} \\
+\midrule
+XGBoost          & -- & -- & -- \\
+LightGBM         & -- & -- & -- \\
+CatBoost         & -- & -- & -- \\
+TabPFN-2.5       & -- & -- & -- \\
+TabM             & -- & -- & -- \\
+TabDPT           & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{[ANALYSER LES RÉSULTATS DU TABLEAU]} : Quel modèle performe le mieux? L'apprentissage
+profond rivalise-t-il avec le boosting? Quelles architectures se distinguent?
+
+\subsection{Impact de la régularisation}
+
+\begin{table}[htbp]
+\caption{Impact des techniques de régularisation sur le modèle retenu}
+\label{tab:regularisation}
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{QWK (val.)} & \textbf{QWK (test)} \\
+\midrule
+Sans régularisation & -- & -- \\
+Dropout ($p=0.1$)   & -- & -- \\
+Dropout ($p=0.3$)   & -- & -- \\
+Batch Normalization & -- & -- \\
+Weight Decay ($10^{-3}$) & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Semi-supervisé et données non étiquetées}
+
+\textbf{[DÉCRIRE ET ANALYSER LES RÉSULTATS]} : L'ajout des données non étiquetées a-t-il
+amélioré les performances? Dans quelle mesure?
+
+\subsection{Approche Teacher--Student}
+
+\textbf{[DÉCRIRE ET ANALYSER LES RÉSULTATS]} : L'augmentation synthétique a-t-elle apporté
+un gain? Comparer avec et sans pré-entraînement.
+
+\subsection{Étude d'ablation}
+
+\begin{table}[htbp]
+\caption{Étude d'ablation sur les composantes de l'architecture retenue}
+\label{tab:ablation}
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Configuration} & \textbf{QWK (val.)} \\
+\midrule
+Modèle complet            & -- \\
+Sans embeddings d'entrée  & -- \\
+Sans pré-entraînement     & -- \\
+Sans mécanisme d'attention & -- \\
+\textbf{[AUTRES ABLATIONS]} & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ce qui n'a pas fonctionné}
+
+\textbf{[DOCUMENTER LES ÉCHECS]} : Quelles approches ou configurations n'ont pas donné les
+résultats escomptés? Quelles hypothèses ont été infirmées?
+
+\subsection{Possibilités d'amélioration}
+
+\textbf{[SUGGESTIONS]} : Quelles pistes pourraient être explorées avec plus de temps ou de
+ressources? Ex.~: optimisation bayésienne des hyperparamètres, architectures supplémentaires,
+données externes, ensembling.
+
+% ---------------------------------------------------------------
+% 6. Conclusion
+% ---------------------------------------------------------------
+\section{Conclusion}
+
+Ce projet a présenté une exploration comparative d'architectures d'apprentissage profond
+modernes appliquées à l'évaluation du risque ordinal en assurance-vie. En utilisant le
+jeu de données \textit{Prudential Life Insurance Assessment}, nous avons confronté des
+modèles de \textit{gradient boosting} bien établis (XGBoost, LightGBM, CatBoost) à des
+architectures récentes conçues pour les données tabulaires (TabPFN-2.5, TabM, TabDPT).
+
+Nos expériences montrent que \textbf{[RÉSUMÉ DES CONCLUSIONS PRINCIPALES]}. En particulier,
+\textbf{[RÉSULTAT CLÉ 1]}. L'étude d'ablation révèle que \textbf{[RÉSULTAT CLÉ 2]}.
+L'approche semi-supervisée \textbf{[RÉSULTAT CLÉ 3]}.
+
+Ces résultats suggèrent que \textbf{[INTERPRÉTATION]}, ce qui contribue à la compréhension
+du potentiel et des limites de l'apprentissage profond sur les données tabulaires dans un
+contexte applicatif réel.
+
+% ---------------------------------------------------------------
+% 7. Utilisation de l'IA générative
+% ---------------------------------------------------------------
+\section{Utilisation de l'IA générative}
+
+\textbf{[COMPLÉTER CETTE SECTION CONFORMÉMENT AUX DIRECTIVES]}
+
+Dans le cadre de ce projet, nous avons eu recours à des outils d'IA générative pour les
+usages suivants~:
+
+\begin{itemize}
+  \item \textbf{Génération de code}~: \textbf{[DÉCRIRE]}, notamment pour les fonctions
+        \texttt{[NOMS DES FONCTIONS]}. Exemples de prompts utilisés~: \textit{``[PROMPT 1]''},
+        \textit{``[PROMPT 2]''}.
+  \item \textbf{Lissage grammatical}~: Les sections \textbf{[NOMS DES SECTIONS]} ont été
+        relues et corrigées avec l'aide de \textbf{[OUTIL]}.
+\end{itemize}
+
+% OU, si aucun usage :
+% Nous n'avons pas eu recours à des outils d'IA générative dans la rédaction de ce rapport
+% ni dans la génération du code associé à ce projet.
+
+% ---------------------------------------------------------------
+% Références
+% ---------------------------------------------------------------
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
