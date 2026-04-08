@@ -1,0 +1,8 @@
+torch>=2.0
+pytorch-tabnet>=4.1
+tabm
+rtdl_num_embeddings
+numpy
+pandas
+scikit-learn
+scipy
