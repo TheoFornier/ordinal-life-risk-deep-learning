@@ -1,0 +1,46 @@
+[
+    {
+        "name": "XGBoost",
+        "author": "Bilal",
+        "color": "#2563eb",
+        "run_id": "0g2qb1ud",
+        "qwk_simple": 0.599,
+        "qwk_offset": 0.6535,
+        "val_rmse": 1.8419,
+        "train_rmse": 1.7587,
+        "hyperparams": {
+            "learning_rate": 0.0421,
+            "max_depth": 4,
+            "n_estimators": 750,
+            "min_child_weight": 100,
+            "subsample": 0.744,
+            "colsample_bytree": 0.645
+        },
+        "train_rmse_curve": null,
+        "val_rmse_curve": null,
+        "confusion_matrix": null,
+        "pred_distribution": null,
+        "true_distribution": null
+    },
+    {
+        "name": "CatBoost",
+        "author": "Bilal",
+        "color": "#f59e0b",
+        "run_id": "sno5wrbj",
+        "qwk_simple": 0.6013,
+        "qwk_offset": 0.6538,
+        "val_rmse": null,
+        "train_rmse": null,
+        "hyperparams": {
+            "learning_rate": 0.1935,
+            "max_depth": 7,
+            "n_estimators": 300,
+            "best_iteration": 213
+        },
+        "train_rmse_curve": null,
+        "val_rmse_curve": null,
+        "confusion_matrix": null,
+        "pred_distribution": null,
+        "true_distribution": null
+    }
+]
