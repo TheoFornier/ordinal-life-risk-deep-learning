@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 from config import TabNetConfig
 from logging_utils import get_logger
+from metrics import qwk
 from models.base import BaseTabularModel
 
 logger = get_logger(__name__)
@@ -48,6 +49,7 @@ class TabNetModel(BaseTabularModel):
         from pytorch_tabnet.callbacks import Callback
 
         cfg = self.config
+        outer_model = self.model  # TabNetRegressor, captured for use inside callback
         print(f"TabNet | training max_epochs={cfg.epochs} batch={cfg.batch_size} patience={cfg.early_stopping_patience}...", flush=True)
 
         ep_width = len(str(cfg.epochs))
@@ -73,10 +75,13 @@ class TabNetModel(BaseTabularModel):
                 self.ep += 1
                 self.pbar.reset()
                 tr_loss = (logs or {}).get("loss", float("nan"))
-                val_mse = (logs or {}).get("val_mse", float("nan"))
+                val_loss = (logs or {}).get("val_mse", float("nan"))
+                val_preds = outer_model.predict(X_val).squeeze(1)
+                val_qwk = qwk(val_preds, y_val)
                 epoch_line = (
                     f"Ep {self.ep:>{ep_width}}/{cfg.epochs} | "
-                    f"tr_loss={tr_loss:.4f} | val_mse={val_mse:.4f}"
+                    f"tr_loss={tr_loss:.4f} | val_loss={val_loss:.4f} | "
+                    f"QWK={val_qwk:.4f}"
                 )
                 tqdm.write(epoch_line, file=sys.stdout)
                 logger.info(epoch_line)
@@ -105,8 +110,10 @@ class TabNetModel(BaseTabularModel):
 
         if val_losses:
             best_epoch = int(np.argmin(val_losses)) + 1
-            print(f"TabNet | best epoch={best_epoch} val_mse={min(val_losses):.4f}", flush=True)
-            logger.info(f"Training done. best_epoch={best_epoch} val_mse={min(val_losses):.4f}")
+            best_val_preds = self.model.predict(X_val).squeeze(1)
+            best_val_qwk = qwk(best_val_preds, y_val)
+            print(f"TabNet | best epoch={best_epoch} val_loss={min(val_losses):.4f} QWK={best_val_qwk:.4f}", flush=True)
+            logger.info(f"Training done. best_epoch={best_epoch} val_loss={min(val_losses):.4f} QWK={best_val_qwk:.4f}")
         else:
             print("TabNet | training done.", flush=True)
 
