@@ -24,7 +24,6 @@ class DataConfig:
         "../prudential-life-insurance-assessment/synthetic/train_augmented_strategy_b.csv",
     ])
     results_dir: str = os.path.join(_CURRENT_PATH, "results")
-    use_cached: bool = True
     val_size: float = 0.15
     test_size: float = 0.15
     random_state: int = 42

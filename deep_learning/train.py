@@ -8,14 +8,23 @@ from datetime import datetime
 if os.environ.get("PYTHONUNBUFFERED") != "1":
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.execv(sys.executable, [sys.executable, "-u"] + sys.argv)
+import numpy as np
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from config import DataConfig, MODEL_CONFIGS
 from logging_utils import setup_logging, get_logger
 from metrics import accuracy, qwk, apply_offsets
 from models import MODEL_REGISTRY
-from preprocessing import load_data
 from results_utils import save_results
 from trainer import run_training
+
+
+def load_data(data_path: str) -> tuple[np.ndarray, np.ndarray]:
+    df = pd.read_csv(data_path)
+    feature_cols = [c for c in df.columns if c != "Response"]
+    X = df[feature_cols].values.astype(np.float32)
+    y = df["Response"].values.astype(np.float32)
+    return X, y
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -47,11 +56,7 @@ def train_one(model_name: str, data_path: str, data_cfg: DataConfig) -> None:
     print(f"Run dir: {run_dir}")
 
     print("Loading data...")
-    X, y = load_data(
-        data_path=data_path,
-        use_cached=data_cfg.use_cached,
-        random_state=data_cfg.random_state,
-    )
+    X, y = load_data(data_path)
     print(f"Full dataset: {X.shape}")
     input_dim = X.shape[1]
 
