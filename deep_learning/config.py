@@ -3,15 +3,12 @@ from dataclasses import dataclass
 import os
 
 _CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
-_DATASET_PATH = os.path.join(_CURRENT_PATH, "..", "prudential-life-insurance-assessment")
 
 NUM_CLASSES = 8
 
 
 @dataclass
 class DataConfig:
-    train_raw: str = os.path.join(_DATASET_PATH, "train.csv", "train.csv")
-    train_clean: str = os.path.join(_DATASET_PATH, "train_clean.csv")
     results_dir: str = os.path.join(_CURRENT_PATH, "results")
     use_cached: bool = True
     val_size: float = 0.15

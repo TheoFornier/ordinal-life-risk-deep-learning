@@ -22,13 +22,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Entraînement d'un modèle de deep learning tabulaire sur le dataset Prudential."
+        description="Entraînement d'un modèle de deep learning tabulaire."
     )
     parser.add_argument(
         "--model",
         required=True,
         choices=list(MODEL_REGISTRY.keys()),
         help="Architecture du modèle à entraîner.",
+    )
+    parser.add_argument(
+        "--data",
+        required=True,
+        help="Chemin vers le fichier CSV d'entraînement.",
     )
     return parser.parse_args()
 
@@ -38,20 +43,20 @@ def main() -> None:
 
     data_cfg = DataConfig()
     model_cfg = MODEL_CONFIGS[args.model]
+    dataset_name = os.path.splitext(os.path.basename(args.data))[0]
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(data_cfg.results_dir, f"{args.model}_{timestamp}")
+    run_dir = os.path.join(data_cfg.results_dir, f"{dataset_name}_{args.model}_{timestamp}")
 
     setup_logging(log_dir=run_dir, model_name=args.model)
     logger = get_logger(__name__)
 
-    print(f"Model: {args.model} | Config: {model_cfg}")
+    print(f"Model: {args.model} | Dataset: {dataset_name} | Config: {model_cfg}")
     print(f"Run dir: {run_dir}")
 
     print("Loading data...")
     X, y = load_data(
-        train_raw=data_cfg.train_raw,
-        train_clean=data_cfg.train_clean,
+        data_path=args.data,
         use_cached=data_cfg.use_cached,
         random_state=data_cfg.random_state,
     )
@@ -93,7 +98,7 @@ def main() -> None:
 
     summary_lines = [
         "=" * 55,
-        f"  RESULTS — {args.model}",
+        f"  RESULTS — {args.model} on {dataset_name}",
         "=" * 55,
         f"  {'Metric':<30} {'Val':>8}  {'Test':>8}",
         f"  {'-' * 49}",
@@ -107,7 +112,11 @@ def main() -> None:
     print(summary, flush=True)
     logger.info(summary)
 
-    save_results(run_dir, args.model, model_cfg, data_cfg, history, qwk_raw, qwk_offset, acc_raw, acc_offset)
+    save_results(
+        run_dir, args.model, dataset_name, model_cfg, data_cfg, history,
+        qwk_raw, qwk_offset, acc_raw, acc_offset,
+        test_qwk_raw, test_qwk_offset, test_acc_raw, test_acc_offset,
+    )
 
 
 if __name__ == "__main__":

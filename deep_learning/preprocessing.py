@@ -117,19 +117,21 @@ def clean(train_path: str, random_state: int = 42) -> pd.DataFrame:
 
 
 def load_data(
-    train_raw: str,
-    train_clean: str,
+    data_path: str,
     use_cached: bool = True,
     random_state: int = 42,
 ) -> tuple[np.ndarray, np.ndarray]:
-    if use_cached and os.path.exists(train_clean):
-        print("Loading from cache...")
-        df = pd.read_csv(train_clean)
+    stem = os.path.splitext(data_path)[0]
+    cache_path = f"{stem}_clean.csv"
+
+    if use_cached and os.path.exists(cache_path):
+        print(f"Loading from cache: {cache_path}")
+        df = pd.read_csv(cache_path)
     else:
         print("Running cleaning pipeline...")
-        df = clean(train_raw, random_state=random_state)
-        df.to_csv(train_clean, index=False)
-        print(f"Cleaned data saved to {train_clean}")
+        df = clean(data_path, random_state=random_state)
+        df.to_csv(cache_path, index=False)
+        print(f"Cleaned data saved to {cache_path}")
 
     feature_cols = [c for c in df.columns if c != TARGET_COL]
     X = df[feature_cols].values.astype(np.float32)
