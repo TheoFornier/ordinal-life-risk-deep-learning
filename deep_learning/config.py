@@ -9,23 +9,12 @@ NUM_CLASSES = 8
 
 @dataclass
 class DataConfig:
-    # datasets: list[str] = field(default_factory=lambda: [
-    #     "../prudential-life-insurance-assessment/train.csv/train.csv",
-    #     "../prudential-life-insurance-assessment/synthetic/train_augmented_strategy_a.csv",
-    #     "../prudential-life-insurance-assessment/synthetic/train_augmented_strategy_b.csv",
-    #     "../prudential-life-insurance-assessment/synthetic/train_augmented_ctgan_strategy_a.csv",
-    #     "../prudential-life-insurance-assessment/synthetic/train_augmented_ctgan_strategy_b.csv",
-    #     "../prudential-life-insurance-assessment/synthetic/gptband0eal.csv",
-    #     "../prudential-life-insurance-assessment/synthetic/train_augmented_tvae_strategy_a.csv",
-    #     "../prudential-life-insurance-assessment/synthetic/train_augmented_tvae_strategy_b.csv",
-    # ])
-    datasets: list[str] = field(default_factory=lambda: [
-        "../prudential-life-insurance-assessment/train_clean.csv",
-        "../prudential-life-insurance-assessment/synthetic/train_augmented_strategy_b.csv",
+    model: str = "tabm"  # "tabm" or "tabnet"
+    train_path: str = "../prudential-life-insurance-assessment/train_clean.csv"
+    synthetic_datasets: list[str] = field(default_factory=lambda: [
+        "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_ctgan_strategy_b",
     ])
     results_dir: str = os.path.join(_CURRENT_PATH, "results")
-    val_size: float = 0.15
-    test_size: float = 0.15
     random_state: int = 42
     num_classes: int = NUM_CLASSES
 
@@ -43,7 +32,7 @@ class TabNetConfig:
     batch_size: int = 1024
     virtual_batch_size: int = 256
     epochs: int = 200
-    early_stopping_patience: int = 20
+    early_stopping_patience: int = 10
 
 
 @dataclass
@@ -56,7 +45,7 @@ class TabMConfig:
     weight_decay: float = 3e-4
     batch_size: int = 1024
     epochs: int = 100
-    early_stopping_patience: int = 20
+    early_stopping_patience: int = 10
     use_embeddings: bool = True
     n_bins: int = 48
     d_embedding: int = 16

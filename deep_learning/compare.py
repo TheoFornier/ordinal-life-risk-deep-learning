@@ -17,9 +17,7 @@ RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results"
 
 SORT_KEYS = [
     "val_qwk_raw", "val_qwk_offset",
-    "test_qwk_raw", "test_qwk_offset",
     "val_acc_raw", "val_acc_offset",
-    "test_acc_raw", "test_acc_offset",
 ]
 
 
@@ -47,10 +45,9 @@ COLS = [
     ("Dataset", "dataset", 16),
     ("Model", "model", 8),
     ("Ep", "epochs_trained", 4),
+    ("Val QWK raw", "val_qwk_raw", 12),
     ("Val QWK+off", "val_qwk_offset", 12),
-    ("Test QWK+off", "test_qwk_offset", 13),
     ("Val Acc+off", "val_acc_offset", 12),
-    ("Test Acc+off", "test_acc_offset", 13),
 ]
 
 
@@ -82,7 +79,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Compare training runs.")
     parser.add_argument("--model", default=None, help="Filter by model name.")
     parser.add_argument("--dataset", default=None, help="Filter by dataset name.")
-    parser.add_argument("--sort", default="test_qwk_offset", choices=SORT_KEYS,
+    parser.add_argument("--sort", default="val_qwk_offset", choices=SORT_KEYS,
                         help="Metric to sort by (default: test_qwk_offset).")
     parser.add_argument("--export", default=None, metavar="FILE",
                         help="Export table to a CSV file (e.g. comparison.csv).")
