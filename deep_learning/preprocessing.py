@@ -5,10 +5,6 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import KFold
-from logging_utils import get_logger
-
-logger = get_logger(__name__)
-
 
 # ---------------------------------------------------------------------------
 # Définition des types de colonnes (tirée du notebook de nettoyage)
@@ -114,7 +110,7 @@ def clean(
     # 1. Suppression des colonnes creuses sans signal
     cols_to_drop = _drop_sparse_columns(df, train_mask)
     df.drop(columns=cols_to_drop, inplace=True)
-    logger.info(f"{len(cols_to_drop)} colonnes creuses supprimées.")
+    print(f"{len(cols_to_drop)} sparse columns dropped.")
 
     # 2. Imputation des valeurs manquantes
     remaining = [c for c in df.columns if c not in (ID_COL, TARGET_COL, "is_train")]
@@ -133,7 +129,6 @@ def clean(
     for col in text_cols:
         le = LabelEncoder()
         df[col] = le.fit_transform(df[col].astype(str))
-        logger.debug(f"Encodage label '{col}' : {len(le.classes_)} catégories")
 
     # 4. Encodage cible pour les colonnes à forte cardinalité (> 20 valeurs uniques)
     remaining = [c for c in df.columns if c not in (ID_COL, TARGET_COL, "is_train")]
@@ -141,7 +136,7 @@ def clean(
     for col in high_card_cols:
         _target_encode_kfold(df, col, TARGET_COL, random_state=random_state)
     df.drop(columns=high_card_cols, inplace=True)
-    logger.info(f"{len(high_card_cols)} colonnes à haute cardinalité encodées par cible.")
+    print(f"{len(high_card_cols)} high-cardinality columns target-encoded.")
 
     # 5. Feature engineering
     med_kw_cols = [c for c in DUMMY_COLS if c in df.columns]
@@ -162,7 +157,7 @@ def clean(
 
     test_df.insert(0, ID_COL, test_ids.values)
 
-    logger.info(f"Dimensions finales — train : {train_df.shape}, test : {test_df.shape}")
+    print(f"Clean done — train: {train_df.shape}, test: {test_df.shape}")
     return train_df, test_df
 
 
@@ -175,17 +170,17 @@ def load_data(
     random_state: int = 42,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     if use_cached and os.path.exists(train_clean) and os.path.exists(test_clean):
-        logger.info("Chargement depuis le cache...")
+        print("Loading from cache...")
         train_df = pd.read_csv(train_clean)
         test_df = pd.read_csv(test_clean)
         if ID_COL not in test_df.columns:
             raise ValueError(f"Le CSV de test en cache n'a pas la colonne '{ID_COL}'.")
     else:
-        logger.info("Pipeline de nettoyage en cours...")
+        print("Running cleaning pipeline...")
         train_df, test_df = clean(train_raw, test_raw, random_state=random_state)
         train_df.to_csv(train_clean, index=False)
         test_df.to_csv(test_clean, index=False)
-        logger.info(f"Données nettoyées sauvegardées dans {train_clean} et {test_clean}.")
+        print(f"Cleaned data saved to {train_clean}")
 
     feature_cols = [c for c in train_df.columns if c != TARGET_COL]
     X_train = train_df[feature_cols].values.astype(np.float32)

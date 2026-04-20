@@ -6,10 +6,15 @@ from sklearn.preprocessing import StandardScaler
 from tabm import TabM  # type: ignore[import]
 from rtdl_num_embeddings import PiecewiseLinearEmbeddings, compute_bins  # type: ignore[import]
 from torch.utils.data import Dataset, DataLoader
+import sys
+import warnings
+from tqdm import tqdm
 from config import TabMConfig
 from logging_utils import get_logger
 from metrics import qwk
 from models.base import BaseTabularModel
+
+warnings.filterwarnings("ignore", message=".*just two bin edges.*", category=UserWarning)
 
 logger = get_logger(__name__)
 
@@ -68,15 +73,9 @@ class TabMModel(BaseTabularModel):
         self._feature_scaler = StandardScaler()
         self._y_mean: float = 0.0
         self._y_std: float = 1.0
-
-        # Construction différée : les bins PLE nécessitent X_train
         self.model: nn.Module | None = None
 
-        logger.info(
-            f"TabMModel | device={self.device} | k={config.k} | "
-            f"n_blocks={config.n_blocks} | d_block={config.d_block} | "
-            f"dropout={config.dropout} | embeddings={config.use_embeddings}"
-        )
+        print(f"TabM | device={self.device} | k={config.k} | n_blocks={config.n_blocks} | d_block={config.d_block}", flush=True)
 
     def _build_model(self, X_train_scaled: np.ndarray) -> None:
         cfg = self.config
@@ -103,7 +102,7 @@ class TabMModel(BaseTabularModel):
         ).to(self.device)
 
         n_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        logger.info(f"Modèle construit | paramètres={n_params:,}")
+        print(f"TabM | params={n_params:,}", flush=True)
 
     def fit(
         self,
@@ -114,17 +113,14 @@ class TabMModel(BaseTabularModel):
     ) -> None:
         cfg = self.config
 
-        # Normalisation des features
         X_train_s = self._feature_scaler.fit_transform(X_train).astype(np.float32)
         X_val_s = self._feature_scaler.transform(X_val).astype(np.float32)
 
-        # Normalisation de la cible
         self._y_mean = float(y_train.mean())
         self._y_std = float(y_train.std()) or 1.0
         y_train_s = ((y_train - self._y_mean) / self._y_std).astype(np.float32)
         y_val_s = ((y_val - self._y_mean) / self._y_std).astype(np.float32)
 
-        # Construction du modèle maintenant qu'on a les données pour les bins PLE
         self._build_model(X_train_s)
 
         train_loader, val_loader = _make_loaders(
@@ -134,9 +130,7 @@ class TabMModel(BaseTabularModel):
         optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=cfg.epochs
-        )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
         loss_fn = nn.MSELoss()
 
         best_val_loss = float("inf")
@@ -144,33 +138,34 @@ class TabMModel(BaseTabularModel):
         best_state: dict = {}
         k = self.model.k
 
-        logger.info(
-            f"Entraînement | epochs={cfg.epochs} | batch={cfg.batch_size} | "
-            f"lr={cfg.lr} | weight_decay={cfg.weight_decay} | "
-            f"patience={cfg.early_stopping_patience}"
-        )
-
         for epoch in range(1, cfg.epochs + 1):
-            # Entraînement
             self.model.train()
             train_loss = 0.0
-            for X_batch, y_batch in train_loader:
+            batch_pbar = tqdm(
+                train_loader,
+                desc=f"Ep {epoch:>{len(str(cfg.epochs))}}/{cfg.epochs}",
+                unit="batch",
+                dynamic_ncols=True,
+                file=sys.stdout,
+                leave=False,
+            )
+            for X_batch, y_batch in batch_pbar:
                 X_batch = X_batch.to(self.device)
                 y_batch = y_batch.to(self.device)
-
                 optimizer.zero_grad()
-                out = self.model(X_batch)                        # (B, k, 1)
-                pred_flat = out.squeeze(-1).flatten(0, 1)        # (B*k,)
-                true_flat = y_batch.repeat_interleave(k)         # (B*k,)
+                out = self.model(X_batch)
+                pred_flat = out.squeeze(-1).flatten(0, 1)
+                true_flat = y_batch.repeat_interleave(k)
                 loss = loss_fn(pred_flat, true_flat)
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 optimizer.step()
                 train_loss += loss.item() * len(X_batch)
+                batch_pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+            batch_pbar.close()
             train_loss /= len(X_train)
             scheduler.step()
 
-            # Validation
             self.model.eval()
             val_loss = 0.0
             val_preds_list: list[np.ndarray] = []
@@ -182,27 +177,24 @@ class TabMModel(BaseTabularModel):
                     pred_flat = out.squeeze(-1).flatten(0, 1)
                     true_flat = y_batch.repeat_interleave(k)
                     val_loss += loss_fn(pred_flat, true_flat).item() * len(X_batch)
-                    # Moyenne des k sous-modèles, dénormalisée
                     preds_mean = out.mean(dim=1).squeeze(-1).cpu().numpy()
                     val_preds_list.append(preds_mean * self._y_std + self._y_mean)
             val_loss /= len(X_val)
 
             val_preds_denorm = np.concatenate(val_preds_list)
             val_qwk = qwk(val_preds_denorm, y_val)
-
+            lr_cur = scheduler.get_last_lr()[0]
             is_best = val_loss < best_val_loss
             marker = " ★" if is_best else ""
-            lr_cur = scheduler.get_last_lr()[0]
 
-            logger.info(
-                f"Époque {epoch:4d}/{cfg.epochs} | "
-                f"train_loss={train_loss:.4f} | "
-                f"val_loss={val_loss:.4f} | "
-                f"val_QWK={val_qwk:.4f} | "
-                f"lr={lr_cur:.2e} | "
-                f"patience={patience_counter}/{cfg.early_stopping_patience}"
-                f"{marker}"
+            epoch_line = (
+                f"Ep {epoch:>{len(str(cfg.epochs))}}/{cfg.epochs} | "
+                f"tr_loss={train_loss:.4f} | val_loss={val_loss:.4f} | "
+                f"QWK={val_qwk:.4f} | lr={lr_cur:.2e} | "
+                f"pat={patience_counter}/{cfg.early_stopping_patience}{marker}"
             )
+            tqdm.write(epoch_line, file=sys.stdout)
+            logger.info(epoch_line)
 
             if is_best:
                 best_val_loss = val_loss
@@ -211,11 +203,13 @@ class TabMModel(BaseTabularModel):
             else:
                 patience_counter += 1
                 if patience_counter >= cfg.early_stopping_patience:
-                    logger.info(f"Arrêt anticipé déclenché à l'époque {epoch}.")
+                    tqdm.write(f"Early stopping at epoch {epoch}.", file=sys.stdout)
+                    logger.info(f"Early stopping at epoch {epoch}.")
                     break
 
         self.model.load_state_dict(best_state)
-        logger.info(f"Entraînement terminé. Meilleure val_loss={best_val_loss:.4f}")
+        print(f"TabM | best val_loss={best_val_loss:.4f}", flush=True)
+        logger.info(f"Training done. best_val_loss={best_val_loss:.4f}")
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         X_s = self._feature_scaler.transform(X).astype(np.float32)
@@ -225,10 +219,10 @@ class TabMModel(BaseTabularModel):
         with torch.no_grad():
             for X_batch in loader:
                 X_batch = X_batch.to(self.device)
-                out = self.model(X_batch)                        # (B, k, 1)
+                out = self.model(X_batch)
                 preds.append(out.mean(dim=1).squeeze(-1).cpu().numpy())
         raw = np.concatenate(preds)
-        return raw * self._y_std + self._y_mean                  # dénormalisation
+        return raw * self._y_std + self._y_mean
 
     def save(self, path: str) -> None:
         torch.save(
@@ -240,7 +234,7 @@ class TabMModel(BaseTabularModel):
             },
             path,
         )
-        logger.info(f"Modèle sauvegardé dans {path}")
+        print(f"Model saved: {path}", flush=True)
 
     def load(self, path: str) -> None:
         ckpt = torch.load(path, map_location=self.device)
@@ -248,4 +242,4 @@ class TabMModel(BaseTabularModel):
         self._y_mean = ckpt["y_mean"]
         self._y_std = ckpt["y_std"]
         self.model.load_state_dict(ckpt["state_dict"])
-        logger.info(f"Modèle chargé depuis {path}")
+        print(f"Model loaded: {path}", flush=True)

@@ -19,7 +19,7 @@ class DataConfig:
     # Utiliser les CSV déjà nettoyés si disponibles
     use_cached: bool = True
     # Réentraîner sur l'ensemble complet après la phase de validation
-    retrain: bool = True
+    retrain: bool = False
     val_size: float = 0.2
     random_state: int = 42
     num_classes: int = NUM_CLASSES

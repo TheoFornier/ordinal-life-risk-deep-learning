@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import sys
 import numpy as np
+from tqdm import tqdm
 
 from config import TabNetConfig
 from logging_utils import get_logger
@@ -32,13 +34,9 @@ class TabNetModel(BaseTabularModel):
             scheduler_params={"step_size": 10, "gamma": 0.9},
             mask_type="entmax",
             device_name=device,
-            # On désactive les prints internes; on logue l'historique après fit()
             verbose=0,
         )
-        logger.info(
-            f"TabNetModel | device={device} | n_d={config.n_d} | "
-            f"n_steps={config.n_steps} | gamma={config.gamma}"
-        )
+        print(f"TabNet | device={device} | n_d={config.n_d} | n_steps={config.n_steps} | gamma={config.gamma}", flush=True)
 
     def fit(
         self,
@@ -47,11 +45,44 @@ class TabNetModel(BaseTabularModel):
         X_val: np.ndarray,
         y_val: np.ndarray,
     ) -> None:
+        from pytorch_tabnet.callbacks import Callback
+
         cfg = self.config
-        logger.info(
-            f"Entraînement | max_epochs={cfg.epochs} | batch={cfg.batch_size} | "
-            f"lr={cfg.lr} | patience={cfg.early_stopping_patience}"
-        )
+        print(f"TabNet | training max_epochs={cfg.epochs} batch={cfg.batch_size} patience={cfg.early_stopping_patience}...", flush=True)
+
+        ep_width = len(str(cfg.epochs))
+
+        class _TQDMCallback(Callback):
+            def on_train_begin(self, logs=None):
+                self.ep = 0
+                self.pbar = tqdm(
+                    total=cfg.epochs,
+                    desc="TabNet batches",
+                    unit="batch",
+                    dynamic_ncols=True,
+                    file=sys.stdout,
+                    leave=False,
+                )
+
+            def on_batch_end(self, batch, logs=None):
+                loss = (logs or {}).get("loss", 0.0)
+                self.pbar.set_postfix({"loss": f"{loss:.4f}"})
+                self.pbar.update(1)
+
+            def on_epoch_end(self, epoch, logs=None):
+                self.ep += 1
+                self.pbar.reset()
+                tr_loss = (logs or {}).get("loss", float("nan"))
+                val_mse = (logs or {}).get("val_mse", float("nan"))
+                epoch_line = (
+                    f"Ep {self.ep:>{ep_width}}/{cfg.epochs} | "
+                    f"tr_loss={tr_loss:.4f} | val_mse={val_mse:.4f}"
+                )
+                tqdm.write(epoch_line, file=sys.stdout)
+                logger.info(epoch_line)
+
+            def on_train_end(self, logs=None):
+                self.pbar.close()
 
         self.model.fit(
             X_train=X_train,
@@ -64,38 +95,28 @@ class TabNetModel(BaseTabularModel):
             batch_size=cfg.batch_size,
             virtual_batch_size=cfg.virtual_batch_size,
             drop_last=False,
+            callbacks=[_TQDMCallback()],
         )
 
         try:
-            train_losses = list(self.model.history["loss"])
             val_losses = list(self.model.history["val_mse"])
         except (KeyError, TypeError):
-            train_losses, val_losses = [], []
-
-        best_epoch = int(np.argmin(val_losses)) + 1 if val_losses else 0
-
-        for epoch_idx, (tl, vl) in enumerate(zip(train_losses, val_losses), start=1):
-            marker = " ★" if epoch_idx == best_epoch else ""
-            logger.info(
-                f"Époque {epoch_idx:4d}/{cfg.epochs} | "
-                f"train_loss={tl:.4f} | "
-                f"val_mse={vl:.4f}"
-                f"{marker}"
-            )
+            val_losses = []
 
         if val_losses:
-            logger.info(f"Entraînement terminé. Meilleure époque={best_epoch} | val_mse={min(val_losses):.4f}")
+            best_epoch = int(np.argmin(val_losses)) + 1
+            print(f"TabNet | best epoch={best_epoch} val_mse={min(val_losses):.4f}", flush=True)
+            logger.info(f"Training done. best_epoch={best_epoch} val_mse={min(val_losses):.4f}")
         else:
-            logger.info("Entraînement terminé.")
+            print("TabNet | training done.", flush=True)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         return self.model.predict(X).squeeze(1)
 
     def save(self, path: str) -> None:
-        # pytorch-tabnet sauvegarde une archive zip; le chemin ne doit pas inclure l'extension
         self.model.save_model(path)
-        logger.info(f"Modèle sauvegardé dans {path}.zip")
+        print(f"Model saved: {path}.zip", flush=True)
 
     def load(self, path: str) -> None:
         self.model.load_model(path + ".zip")
-        logger.info(f"Modèle chargé depuis {path}.zip")
+        print(f"Model loaded: {path}.zip", flush=True)
