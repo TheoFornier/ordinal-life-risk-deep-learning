@@ -10,6 +10,9 @@ NUM_CLASSES = 8
 @dataclass
 class DataConfig:
     model: str = "tabm"  # "tabm" or "tabnet"
+    run_base_training: bool = False
+    synth_sample_weight: float = 0.5  # loss weight for synthetic rows (1.0 = same as real)
+    max_synth_ratio: float = 1.0  # max synthetic rows as a multiple of real train rows (e.g. 0.5 = half as many)
     train_path: str = "../prudential-life-insurance-assessment/train_clean.csv"
     synthetic_datasets: list[str] = field(default_factory=lambda: [
         "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_ctgan_strategy_b",

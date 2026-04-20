@@ -33,6 +33,7 @@ def train_one(
     data_cfg: DataConfig,
     X_fit: np.ndarray | None = None,
     y_fit: np.ndarray | None = None,
+    sample_weight: np.ndarray | None = None,
 ) -> None:
     model_cfg = MODEL_CONFIGS[model_name]
 
@@ -53,7 +54,7 @@ def train_one(
     model_cls = MODEL_REGISTRY[model_name]
     model = model_cls(input_dim=input_dim, config=model_cfg)
     qwk_raw, qwk_offset, acc_raw, acc_offset, _, history = run_training(
-        model, X_train, y_train, X_val, y_val, X_fit=X_fit, y_fit=y_fit
+        model, X_train, y_train, X_val, y_val, X_fit=X_fit, y_fit=y_fit, sample_weight=sample_weight
     )
 
     summary_lines = [
@@ -92,13 +93,15 @@ def main() -> None:
         stratify=y.astype(int),
     )
 
-    total = 1 + len(data_cfg.synthetic_datasets)
-    run_idx = 1
+    total = int(data_cfg.run_base_training) + len(data_cfg.synthetic_datasets)
+    run_idx = 0
 
-    print(f"\n{'=' * 55}")
-    print(f"  [{run_idx}/{total}] train_clean (base only)")
-    print(f"{'=' * 55}\n", flush=True)
-    train_one(data_cfg.model, "train_clean", X_train_base, y_train_base, X_val, y_val, data_cfg)
+    if data_cfg.run_base_training:
+        run_idx += 1
+        print(f"\n{'=' * 55}")
+        print(f"  [{run_idx}/{total}] train_clean (base only)")
+        print(f"{'=' * 55}\n", flush=True)
+        train_one(data_cfg.model, "train_clean", X_train_base, y_train_base, X_val, y_val, data_cfg)
 
     for synth_folder in data_cfg.synthetic_datasets:
         run_idx += 1
@@ -125,11 +128,28 @@ def main() -> None:
             X_synth_parts.append(Xs)
             y_synth_parts.append(ys)
 
+        n_real = len(X_train_folder)
+        n_synth = sum(len(x) for x in X_synth_parts)
+        max_synth = int(n_real * data_cfg.max_synth_ratio)
+        if n_synth > max_synth:
+            X_synth_all = np.concatenate(X_synth_parts, axis=0)
+            y_synth_all = np.concatenate(y_synth_parts, axis=0)
+            rng = np.random.default_rng(data_cfg.random_state)
+            idx = rng.choice(n_synth, size=max_synth, replace=False)
+            X_synth_parts = [X_synth_all[idx]]
+            y_synth_parts = [y_synth_all[idx]]
+            n_synth = max_synth
+            print(f"Synthetic rows capped at {max_synth:,} ({data_cfg.max_synth_ratio}× real)", flush=True)
+        sample_weight = np.concatenate([
+            np.ones(n_real, dtype=np.float32),
+            np.full(n_synth, data_cfg.synth_sample_weight, dtype=np.float32),
+        ])
+
         X_train_aug = np.concatenate([X_train_folder] + X_synth_parts, axis=0)
         y_train_aug = np.concatenate([y_train_folder] + y_synth_parts, axis=0)
 
         train_one(data_cfg.model, dataset_name, X_train_aug, y_train_aug, X_val_folder, y_val_folder, data_cfg,
-                  X_fit=X_train_folder, y_fit=y_train_folder)
+                  X_fit=X_train_folder, y_fit=y_train_folder, sample_weight=sample_weight)
 
 
 if __name__ == "__main__":

@@ -20,14 +20,17 @@ logger = get_logger(__name__)
 
 
 class _TabularDataset(Dataset):
-    def __init__(self, X: np.ndarray, y: np.ndarray | None = None) -> None:
+    def __init__(self, X: np.ndarray, y: np.ndarray | None = None, w: np.ndarray | None = None) -> None:
         self.X = torch.from_numpy(X).float()
         self.y = torch.from_numpy(y).float() if y is not None else None
+        self.w = torch.from_numpy(w).float() if w is not None else None
 
     def __len__(self) -> int:
         return len(self.X)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor] | torch.Tensor:
+    def __getitem__(self, idx: int):
+        if self.y is not None and self.w is not None:
+            return self.X[idx], self.y[idx], self.w[idx]
         if self.y is not None:
             return self.X[idx], self.y[idx]
         return self.X[idx]
@@ -39,9 +42,10 @@ def _make_loaders(
     X_val: np.ndarray,
     y_val: np.ndarray,
     batch_size: int,
+    sample_weight: np.ndarray | None = None,
 ) -> tuple[DataLoader, DataLoader]:
     train_loader = DataLoader(
-        _TabularDataset(X_train, y_train),
+        _TabularDataset(X_train, y_train, sample_weight),
         batch_size=batch_size,
         shuffle=True,
         pin_memory=torch.cuda.is_available(),
@@ -112,6 +116,7 @@ class TabMModel(BaseTabularModel):
         y_val: np.ndarray,
         X_fit: np.ndarray | None = None,
         y_fit: np.ndarray | None = None,
+        sample_weight: np.ndarray | None = None,
     ) -> list[dict]:
         cfg = self.config
         X_stats = X_fit if X_fit is not None else X_train
@@ -130,14 +135,15 @@ class TabMModel(BaseTabularModel):
         self._build_model(X_stats_s)
 
         train_loader, val_loader = _make_loaders(
-            X_train_s, y_train_s, X_val_s, y_val_s, batch_size=cfg.batch_size
+            X_train_s, y_train_s, X_val_s, y_val_s, batch_size=cfg.batch_size,
+            sample_weight=sample_weight,
         )
 
         optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
         )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
-        loss_fn = nn.MSELoss()
+        loss_fn = nn.MSELoss(reduction="none")
 
         best_val_loss = float("inf")
         patience_counter = 0
@@ -156,14 +162,18 @@ class TabMModel(BaseTabularModel):
                 file=sys.stdout,
                 leave=False,
             )
-            for X_batch, y_batch in batch_pbar:
-                X_batch = X_batch.to(self.device)
-                y_batch = y_batch.to(self.device)
+            for batch in batch_pbar:
+                X_batch, y_batch = batch[0].to(self.device), batch[1].to(self.device)
+                w_batch = batch[2].to(self.device) if len(batch) == 3 else None
                 optimizer.zero_grad()
                 out = self.model(X_batch)
                 pred_flat = out.squeeze(-1).flatten(0, 1)
                 true_flat = y_batch.repeat_interleave(k)
-                loss = loss_fn(pred_flat, true_flat)
+                loss_per = loss_fn(pred_flat, true_flat)
+                if w_batch is not None:
+                    loss = (loss_per * w_batch.repeat_interleave(k)).mean()
+                else:
+                    loss = loss_per.mean()
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 optimizer.step()
@@ -183,7 +193,7 @@ class TabMModel(BaseTabularModel):
                     out = self.model(X_batch)
                     pred_flat = out.squeeze(-1).flatten(0, 1)
                     true_flat = y_batch.repeat_interleave(k)
-                    val_loss += loss_fn(pred_flat, true_flat).item() * len(X_batch)
+                    val_loss += loss_fn(pred_flat, true_flat).mean().item() * len(X_batch)
                     preds_mean = out.mean(dim=1).squeeze(-1).cpu().numpy()
                     val_preds_list.append(preds_mean * self._y_std + self._y_mean)
             val_loss /= len(X_val)
