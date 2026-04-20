@@ -30,40 +30,31 @@ def parse_args() -> argparse.Namespace:
         choices=list(MODEL_REGISTRY.keys()),
         help="Architecture du modèle à entraîner.",
     )
-    parser.add_argument(
-        "--data",
-        required=True,
-        help="Chemin vers le fichier CSV d'entraînement.",
-    )
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
-
-    data_cfg = DataConfig()
-    model_cfg = MODEL_CONFIGS[args.model]
-    dataset_name = os.path.splitext(os.path.basename(args.data))[0]
+def train_one(model_name: str, data_path: str, data_cfg: DataConfig) -> None:
+    model_cfg = MODEL_CONFIGS[model_name]
+    dataset_name = os.path.splitext(os.path.basename(data_path))[0]
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(data_cfg.results_dir, f"{dataset_name}_{args.model}_{timestamp}")
+    run_dir = os.path.join(data_cfg.results_dir, f"{dataset_name}_{model_name}_{timestamp}")
 
-    setup_logging(log_dir=run_dir, model_name=args.model)
+    setup_logging(log_dir=run_dir, model_name=model_name)
     logger = get_logger(__name__)
 
-    print(f"Model: {args.model} | Dataset: {dataset_name} | Config: {model_cfg}")
+    print(f"Model: {model_name} | Dataset: {dataset_name} | Config: {model_cfg}")
     print(f"Run dir: {run_dir}")
 
     print("Loading data...")
     X, y = load_data(
-        data_path=args.data,
+        data_path=data_path,
         use_cached=data_cfg.use_cached,
         random_state=data_cfg.random_state,
     )
     print(f"Full dataset: {X.shape}")
     input_dim = X.shape[1]
 
-    # 3-way stratified split: train / val / test
     X_trainval, X_test, y_trainval, y_test = train_test_split(
         X, y,
         test_size=data_cfg.test_size,
@@ -82,13 +73,12 @@ def main() -> None:
         flush=True,
     )
 
-    model_cls = MODEL_REGISTRY[args.model]
+    model_cls = MODEL_REGISTRY[model_name]
     model = model_cls(input_dim=input_dim, config=model_cfg)
     qwk_raw, qwk_offset, acc_raw, acc_offset, val_offsets, history = run_training(
         model, X_train, y_train, X_val, y_val
     )
 
-    # Final evaluation on held-out test set using offsets fitted on val
     test_preds = model.predict(X_test)
     test_qwk_raw = qwk(test_preds, y_test)
     test_acc_raw = accuracy(test_preds, y_test)
@@ -98,7 +88,7 @@ def main() -> None:
 
     summary_lines = [
         "=" * 55,
-        f"  RESULTS — {args.model} on {dataset_name}",
+        f"  RESULTS — {model_name} on {dataset_name}",
         "=" * 55,
         f"  {'Metric':<30} {'Val':>8}  {'Test':>8}",
         f"  {'-' * 49}",
@@ -113,10 +103,25 @@ def main() -> None:
     logger.info(summary)
 
     save_results(
-        run_dir, args.model, dataset_name, model_cfg, data_cfg, history,
+        run_dir, model_name, dataset_name, model_cfg, data_cfg, history,
         qwk_raw, qwk_offset, acc_raw, acc_offset,
         test_qwk_raw, test_qwk_offset, test_acc_raw, test_acc_offset,
     )
+
+
+def main() -> None:
+    args = parse_args()
+    data_cfg = DataConfig()
+
+    if not data_cfg.datasets:
+        raise SystemExit("No datasets configured. Add CSV paths to DataConfig.datasets in config.py.")
+
+    total = len(data_cfg.datasets)
+    for i, data_path in enumerate(data_cfg.datasets, start=1):
+        print(f"\n{'=' * 55}")
+        print(f"  [{i}/{total}] {os.path.basename(data_path)}")
+        print(f"{'=' * 55}\n", flush=True)
+        train_one(args.model, data_path, data_cfg)
 
 
 if __name__ == "__main__":

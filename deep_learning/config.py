@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 
 _CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -9,6 +9,16 @@ NUM_CLASSES = 8
 
 @dataclass
 class DataConfig:
+    datasets: list[str] = field(default_factory=lambda: [
+        "../prudential-life-insurance-assessment/train.csv/train.csv",
+        "../prudential-life-insurance-assessment/synthetic/train_augmented_strategy_a.csv",
+        "../prudential-life-insurance-assessment/synthetic/train_augmented_strategy_b.csv",
+        "../prudential-life-insurance-assessment/synthetic/train_augmented_ctgan_strategy_a.csv",
+        "../prudential-life-insurance-assessment/synthetic/train_augmented_ctgan_strategy_b.csv",
+        "../prudential-life-insurance-assessment/synthetic/gptband0eal.csv",
+        "../prudential-life-insurance-assessment/synthetic/train_augmented_tvae_strategy_a.csv",
+        "../prudential-life-insurance-assessment/synthetic/train_augmented_tvae_strategy_b.csv",
+    ])
     results_dir: str = os.path.join(_CURRENT_PATH, "results")
     use_cached: bool = True
     val_size: float = 0.15
