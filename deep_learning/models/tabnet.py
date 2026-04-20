@@ -45,7 +45,7 @@ class TabNetModel(BaseTabularModel):
         y_train: np.ndarray,
         X_val: np.ndarray,
         y_val: np.ndarray,
-    ) -> None:
+    ) -> list[dict]:
         from pytorch_tabnet.callbacks import Callback
 
         cfg = self.config
@@ -53,6 +53,7 @@ class TabNetModel(BaseTabularModel):
         print(f"TabNet | training max_epochs={cfg.epochs} batch={cfg.batch_size} patience={cfg.early_stopping_patience}...", flush=True)
 
         ep_width = len(str(cfg.epochs))
+        history: list[dict] = []
 
         class _TQDMCallback(Callback):
             def on_train_begin(self, logs=None):
@@ -85,6 +86,7 @@ class TabNetModel(BaseTabularModel):
                 )
                 tqdm.write(epoch_line, file=sys.stdout)
                 logger.info(epoch_line)
+                history.append({"epoch": self.ep, "train_loss": tr_loss, "val_loss": val_loss, "val_qwk": val_qwk})
 
             def on_train_end(self, logs=None):
                 self.pbar.close()
@@ -116,6 +118,7 @@ class TabNetModel(BaseTabularModel):
             logger.info(f"Training done. best_epoch={best_epoch} val_loss={min(val_losses):.4f} QWK={best_val_qwk:.4f}")
         else:
             print("TabNet | training done.", flush=True)
+        return history
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         return self.model.predict(X).squeeze(1)

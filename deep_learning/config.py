@@ -14,7 +14,7 @@ class DataConfig:
     test_raw: str = os.path.join(_DATASET_PATH, "test.csv", "test.csv")
     train_clean: str = os.path.join(_DATASET_PATH, "train_clean.csv")
     test_clean: str = os.path.join(_DATASET_PATH, "test_clean.csv")
-    log_dir: str = os.path.join(_CURRENT_PATH, "logs")
+    results_dir: str = os.path.join(_CURRENT_PATH, "results")
     use_cached: bool = True
     val_size: float = 0.2
     random_state: int = 42

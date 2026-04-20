@@ -13,8 +13,8 @@ def run_training(
     y_train: np.ndarray,
     X_val: np.ndarray,
     y_val: np.ndarray,
-) -> tuple[float, float]:
-    model.fit(X_train, y_train, X_val, y_val)
+) -> tuple[float, float, list[dict]]:
+    history = model.fit(X_train, y_train, X_val, y_val)
 
     val_preds = model.predict(X_val)
     qwk_raw = qwk(val_preds, y_val)
@@ -26,4 +26,4 @@ def run_training(
     print(f"QWK (offsets): {qwk_offset:.4f}", flush=True)
     logger.info(f"QWK (offsets)={qwk_offset:.4f}")
 
-    return qwk_raw, qwk_offset
+    return qwk_raw, qwk_offset, history

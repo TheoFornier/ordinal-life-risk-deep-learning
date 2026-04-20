@@ -11,8 +11,8 @@ class BaseTabularModel(ABC):
         y_train: np.ndarray,
         X_val: np.ndarray,
         y_val: np.ndarray,
-    ) -> None:
-        """Entraîne le modèle sur les données."""
+    ) -> list[dict]:
+        """Entraîne le modèle sur les données. Retourne l'historique par époque."""
 
     @abstractmethod
     def predict(self, X: np.ndarray) -> np.ndarray:

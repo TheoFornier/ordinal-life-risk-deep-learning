@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import datetime
 
 # Force unbuffered output regardless of how the script is launched.
 if os.environ.get("PYTHONUNBUFFERED") != "1":
@@ -12,6 +13,7 @@ from config import DataConfig, MODEL_CONFIGS
 from logging_utils import setup_logging, get_logger
 from models import MODEL_REGISTRY
 from preprocessing import load_data
+from results_utils import save_results
 from trainer import run_training
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -36,10 +38,14 @@ def main() -> None:
     data_cfg = DataConfig()
     model_cfg = MODEL_CONFIGS[args.model]
 
-    setup_logging(log_dir=data_cfg.log_dir, model_name=args.model)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = os.path.join(data_cfg.results_dir, f"{args.model}_{timestamp}")
+
+    setup_logging(log_dir=run_dir, model_name=args.model)
     logger = get_logger(__name__)
 
     print(f"Model: {args.model} | Config: {model_cfg}")
+    print(f"Run dir: {run_dir}")
 
     print("Loading data...")
     X_all, y_all, _, _ = load_data(
@@ -64,7 +70,7 @@ def main() -> None:
 
     model_cls = MODEL_REGISTRY[args.model]
     model = model_cls(input_dim=input_dim, config=model_cfg)
-    qwk_raw, qwk_offset = run_training(model, X_train, y_train, X_val, y_val)
+    qwk_raw, qwk_offset, history = run_training(model, X_train, y_train, X_val, y_val)
 
     summary_lines = [
         "=" * 50,
@@ -74,10 +80,11 @@ def main() -> None:
         f"  QWK val+offsets:             {qwk_offset:>8.4f}",
         "=" * 50,
     ]
-
     summary = "\n".join(summary_lines)
     print(summary, flush=True)
     logger.info(summary)
+
+    save_results(run_dir, args.model, model_cfg, data_cfg, history, qwk_raw, qwk_offset)
 
 
 if __name__ == "__main__":

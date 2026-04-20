@@ -110,7 +110,7 @@ class TabMModel(BaseTabularModel):
         y_train: np.ndarray,
         X_val: np.ndarray,
         y_val: np.ndarray,
-    ) -> None:
+    ) -> list[dict]:
         cfg = self.config
 
         X_train_s = self._feature_scaler.fit_transform(X_train).astype(np.float32)
@@ -137,6 +137,7 @@ class TabMModel(BaseTabularModel):
         patience_counter = 0
         best_state: dict = {}
         k = self.model.k
+        history: list[dict] = []
 
         for epoch in range(1, cfg.epochs + 1):
             self.model.train()
@@ -195,6 +196,7 @@ class TabMModel(BaseTabularModel):
             )
             tqdm.write(epoch_line, file=sys.stdout)
             logger.info(epoch_line)
+            history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, "val_qwk": val_qwk})
 
             if is_best:
                 best_val_loss = val_loss
@@ -210,6 +212,7 @@ class TabMModel(BaseTabularModel):
         self.model.load_state_dict(best_state)
         print(f"TabM | best val_loss={best_val_loss:.4f}", flush=True)
         logger.info(f"Training done. best_val_loss={best_val_loss:.4f}")
+        return history
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         X_s = self._feature_scaler.transform(X).astype(np.float32)
