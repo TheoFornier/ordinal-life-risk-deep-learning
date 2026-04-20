@@ -8,6 +8,7 @@ Usage:
 """
 from __future__ import annotations
 import argparse
+import csv
 import json
 import os
 
@@ -41,36 +42,40 @@ def load_runs(model_filter: str | None, dataset_filter: str | None) -> list[dict
     return runs
 
 
+COLS = [
+    ("Run", "_run", 40),
+    ("Dataset", "dataset", 16),
+    ("Model", "model", 8),
+    ("Ep", "epochs_trained", 4),
+    ("Val QWK+off", "val_qwk_offset", 12),
+    ("Test QWK+off", "test_qwk_offset", 13),
+    ("Val Acc+off", "val_acc_offset", 12),
+    ("Test Acc+off", "test_acc_offset", 13),
+]
+
+
 def print_table(runs: list[dict], sort_key: str) -> None:
-    runs = sorted(runs, key=lambda r: r.get(sort_key, 0.0), reverse=True)
-
-    cols = [
-        ("Run", "_run", 40),
-        ("Dataset", "dataset", 16),
-        ("Model", "model", 8),
-        ("Ep", "epochs_trained", 4),
-        ("Val QWK+off", "val_qwk_offset", 12),
-        ("Test QWK+off", "test_qwk_offset", 13),
-        ("Val Acc+off", "val_acc_offset", 12),
-        ("Test Acc+off", "test_acc_offset", 13),
-    ]
-
-    header = "  ".join(label.ljust(width) for label, _, width in cols)
-    sep = "  ".join("-" * width for _, _, width in cols)
+    header = "  ".join(label.ljust(width) for label, _, width in COLS)
+    sep = "  ".join("-" * width for _, _, width in COLS)
     print(header)
     print(sep)
     for r in runs:
         row_parts = []
-        for label, key, width in cols:
+        for label, key, width in COLS:
             val = r.get(key, "—")
-            if isinstance(val, float):
-                cell = f"{val:.4f}"
-            else:
-                cell = str(val)
+            cell = f"{val:.4f}" if isinstance(val, float) else str(val)
             row_parts.append(cell.ljust(width)[:width])
         print("  ".join(row_parts))
-
     print(f"\n{len(runs)} run(s) — sorted by {sort_key} desc")
+
+
+def export_csv(runs: list[dict], path: str) -> None:
+    fieldnames = [key for _, key, _ in COLS]
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(runs)
+    print(f"Exported to {path}")
 
 
 def main() -> None:
@@ -79,13 +84,20 @@ def main() -> None:
     parser.add_argument("--dataset", default=None, help="Filter by dataset name.")
     parser.add_argument("--sort", default="test_qwk_offset", choices=SORT_KEYS,
                         help="Metric to sort by (default: test_qwk_offset).")
+    parser.add_argument("--export", default=None, metavar="FILE",
+                        help="Export table to a CSV file (e.g. comparison.csv).")
     args = parser.parse_args()
 
     runs = load_runs(args.model, args.dataset)
     if not runs:
         print("No runs found.")
         return
+
+    runs = sorted(runs, key=lambda r: r.get(args.sort, 0.0), reverse=True)
     print_table(runs, args.sort)
+
+    out = args.export or os.path.join(RESULTS_DIR, "comparison.csv")
+    export_csv(runs, out)
 
 
 if __name__ == "__main__":

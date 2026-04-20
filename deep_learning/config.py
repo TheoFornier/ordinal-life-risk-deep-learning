@@ -52,7 +52,7 @@ class TabMConfig:
     lr: float = 2e-3
     weight_decay: float = 3e-4
     batch_size: int = 1024
-    epochs: int = 20
+    epochs: int = 50
     early_stopping_patience: int = 15
     use_embeddings: bool = True
     n_bins: int = 48
