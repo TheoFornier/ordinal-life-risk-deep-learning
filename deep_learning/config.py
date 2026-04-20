@@ -20,7 +20,7 @@ class DataConfig:
     #     "../prudential-life-insurance-assessment/synthetic/train_augmented_tvae_strategy_b.csv",
     # ])
     datasets: list[str] = field(default_factory=lambda: [
-        "../prudential-life-insurance-assessment/train.csv/train.csv",
+        "../prudential-life-insurance-assessment/train_clean.csv",
         "../prudential-life-insurance-assessment/synthetic/train_augmented_strategy_b.csv",
     ])
     results_dir: str = os.path.join(_CURRENT_PATH, "results")
