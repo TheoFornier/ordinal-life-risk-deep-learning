@@ -11,6 +11,7 @@ if os.environ.get("PYTHONUNBUFFERED") != "1":
 from sklearn.model_selection import train_test_split
 from config import DataConfig, MODEL_CONFIGS
 from logging_utils import setup_logging, get_logger
+from metrics import accuracy, qwk, apply_offsets
 from models import MODEL_REGISTRY
 from preprocessing import load_data
 from results_utils import save_results
@@ -48,43 +49,65 @@ def main() -> None:
     print(f"Run dir: {run_dir}")
 
     print("Loading data...")
-    X_all, y_all, _, _ = load_data(
+    X, y = load_data(
         train_raw=data_cfg.train_raw,
-        test_raw=data_cfg.test_raw,
         train_clean=data_cfg.train_clean,
-        test_clean=data_cfg.test_clean,
         use_cached=data_cfg.use_cached,
         random_state=data_cfg.random_state,
     )
-    print(f"Train: {X_all.shape}")
-    input_dim = X_all.shape[1]
+    print(f"Full dataset: {X.shape}")
+    input_dim = X.shape[1]
 
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_all,
-        y_all,
-        test_size=data_cfg.val_size,
+    # 3-way stratified split: train / val / test
+    X_trainval, X_test, y_trainval, y_test = train_test_split(
+        X, y,
+        test_size=data_cfg.test_size,
         random_state=data_cfg.random_state,
-        stratify=y_all.astype(int),
+        stratify=y.astype(int),
     )
-    print(f"Split — train: {X_train.shape[0]:,} | val: {X_val.shape[0]:,}")
+    val_fraction = data_cfg.val_size / (1.0 - data_cfg.test_size)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_trainval, y_trainval,
+        test_size=val_fraction,
+        random_state=data_cfg.random_state,
+        stratify=y_trainval.astype(int),
+    )
+    print(
+        f"Split — train: {X_train.shape[0]:,} | val: {X_val.shape[0]:,} | test: {X_test.shape[0]:,}",
+        flush=True,
+    )
 
     model_cls = MODEL_REGISTRY[args.model]
     model = model_cls(input_dim=input_dim, config=model_cfg)
-    qwk_raw, qwk_offset, history = run_training(model, X_train, y_train, X_val, y_val)
+    qwk_raw, qwk_offset, acc_raw, acc_offset, val_offsets, history = run_training(
+        model, X_train, y_train, X_val, y_val
+    )
+
+    # Final evaluation on held-out test set using offsets fitted on val
+    test_preds = model.predict(X_test)
+    test_qwk_raw = qwk(test_preds, y_test)
+    test_acc_raw = accuracy(test_preds, y_test)
+    test_preds_offset = apply_offsets(test_preds, val_offsets)
+    test_qwk_offset = qwk(test_preds_offset, y_test)
+    test_acc_offset = accuracy(test_preds_offset, y_test)
 
     summary_lines = [
-        "=" * 50,
+        "=" * 55,
         f"  RESULTS — {args.model}",
-        "=" * 50,
-        f"  QWK val raw:                 {qwk_raw:>8.4f}",
-        f"  QWK val+offsets:             {qwk_offset:>8.4f}",
-        "=" * 50,
+        "=" * 55,
+        f"  {'Metric':<30} {'Val':>8}  {'Test':>8}",
+        f"  {'-' * 49}",
+        f"  {'QWK (raw)':<30} {qwk_raw:>8.4f}  {test_qwk_raw:>8.4f}",
+        f"  {'QWK (offsets)':<30} {qwk_offset:>8.4f}  {test_qwk_offset:>8.4f}",
+        f"  {'Accuracy (raw)':<30} {acc_raw:>8.4f}  {test_acc_raw:>8.4f}",
+        f"  {'Accuracy (offsets)':<30} {acc_offset:>8.4f}  {test_acc_offset:>8.4f}",
+        "=" * 55,
     ]
     summary = "\n".join(summary_lines)
     print(summary, flush=True)
     logger.info(summary)
 
-    save_results(run_dir, args.model, model_cfg, data_cfg, history, qwk_raw, qwk_offset)
+    save_results(run_dir, args.model, model_cfg, data_cfg, history, qwk_raw, qwk_offset, acc_raw, acc_offset)
 
 
 if __name__ == "__main__":

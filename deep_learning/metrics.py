@@ -5,6 +5,12 @@ from sklearn.metrics import cohen_kappa_score
 from config import NUM_CLASSES
 
 
+def accuracy(y_pred: np.ndarray, y_true: np.ndarray) -> float:
+    y_true = np.array(y_true).astype(int)
+    y_pred = np.clip(np.round(np.array(y_pred)), 1, NUM_CLASSES).astype(int)
+    return float(np.mean(y_pred == y_true))
+
+
 # Quadratic Weighted Kappa — métrique principale du concours
 def qwk(y_pred: np.ndarray, y_true: np.ndarray) -> float:
     y_true = np.array(y_true).astype(int)

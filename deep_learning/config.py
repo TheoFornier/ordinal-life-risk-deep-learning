@@ -11,12 +11,11 @@ NUM_CLASSES = 8
 @dataclass
 class DataConfig:
     train_raw: str = os.path.join(_DATASET_PATH, "train.csv", "train.csv")
-    test_raw: str = os.path.join(_DATASET_PATH, "test.csv", "test.csv")
     train_clean: str = os.path.join(_DATASET_PATH, "train_clean.csv")
-    test_clean: str = os.path.join(_DATASET_PATH, "test_clean.csv")
     results_dir: str = os.path.join(_CURRENT_PATH, "results")
     use_cached: bool = True
-    val_size: float = 0.2
+    val_size: float = 0.15
+    test_size: float = 0.15
     random_state: int = 42
     num_classes: int = NUM_CLASSES
 
@@ -46,7 +45,7 @@ class TabMConfig:
     lr: float = 2e-3
     weight_decay: float = 3e-4
     batch_size: int = 1024
-    epochs: int = 5
+    epochs: int = 20
     early_stopping_patience: int = 15
     use_embeddings: bool = True
     n_bins: int = 48

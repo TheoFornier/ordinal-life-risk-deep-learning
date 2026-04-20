@@ -15,6 +15,8 @@ def save_results(
     history: list[dict],
     qwk_raw: float,
     qwk_offset: float,
+    acc_raw: float = 0.0,
+    acc_offset: float = 0.0,
 ) -> None:
     os.makedirs(run_dir, exist_ok=True)
 
@@ -25,6 +27,8 @@ def save_results(
         "data_config": dataclasses.asdict(data_cfg),
         "final_qwk_raw": round(qwk_raw, 6),
         "final_qwk_offset": round(qwk_offset, 6),
+        "final_accuracy_raw": round(acc_raw, 6),
+        "final_accuracy_offset": round(acc_offset, 6),
     }
     with open(os.path.join(run_dir, "hyperparameters.json"), "w", encoding="utf-8") as f:
         json.dump(params, f, indent=2)
