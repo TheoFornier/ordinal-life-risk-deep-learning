@@ -110,18 +110,24 @@ class TabMModel(BaseTabularModel):
         y_train: np.ndarray,
         X_val: np.ndarray,
         y_val: np.ndarray,
+        X_fit: np.ndarray | None = None,
+        y_fit: np.ndarray | None = None,
     ) -> list[dict]:
         cfg = self.config
+        X_stats = X_fit if X_fit is not None else X_train
+        y_stats = y_fit if y_fit is not None else y_train
 
-        X_train_s = self._feature_scaler.fit_transform(X_train).astype(np.float32)
+        self._feature_scaler.fit(X_stats)
+        X_train_s = self._feature_scaler.transform(X_train).astype(np.float32)
         X_val_s = self._feature_scaler.transform(X_val).astype(np.float32)
 
-        self._y_mean = float(y_train.mean())
-        self._y_std = float(y_train.std()) or 1.0
+        self._y_mean = float(y_stats.mean())
+        self._y_std = float(y_stats.std()) or 1.0
         y_train_s = ((y_train - self._y_mean) / self._y_std).astype(np.float32)
         y_val_s = ((y_val - self._y_mean) / self._y_std).astype(np.float32)
 
-        self._build_model(X_train_s)
+        X_stats_s = self._feature_scaler.transform(X_stats).astype(np.float32)
+        self._build_model(X_stats_s)
 
         train_loader, val_loader = _make_loaders(
             X_train_s, y_train_s, X_val_s, y_val_s, batch_size=cfg.batch_size

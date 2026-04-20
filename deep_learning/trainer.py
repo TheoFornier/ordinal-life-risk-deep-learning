@@ -13,8 +13,10 @@ def run_training(
     y_train: np.ndarray,
     X_val: np.ndarray,
     y_val: np.ndarray,
+    X_fit: np.ndarray | None = None,
+    y_fit: np.ndarray | None = None,
 ) -> tuple[float, float, float, float, np.ndarray, list[dict]]:
-    history = model.fit(X_train, y_train, X_val, y_val)
+    history = model.fit(X_train, y_train, X_val, y_val, X_fit=X_fit, y_fit=y_fit)
 
     val_preds = model.predict(X_val)
     qwk_raw = qwk(val_preds, y_val)

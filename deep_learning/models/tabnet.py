@@ -45,6 +45,8 @@ class TabNetModel(BaseTabularModel):
         y_train: np.ndarray,
         X_val: np.ndarray,
         y_val: np.ndarray,
+        X_fit: np.ndarray | None = None,
+        y_fit: np.ndarray | None = None,
     ) -> list[dict]:
         from pytorch_tabnet.callbacks import Callback
 

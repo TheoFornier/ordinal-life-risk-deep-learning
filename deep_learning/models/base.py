@@ -11,6 +11,8 @@ class BaseTabularModel(ABC):
         y_train: np.ndarray,
         X_val: np.ndarray,
         y_val: np.ndarray,
+        X_fit: np.ndarray | None = None,
+        y_fit: np.ndarray | None = None,
     ) -> list[dict]:
         """Entraîne le modèle sur les données. Retourne l'historique par époque."""
 

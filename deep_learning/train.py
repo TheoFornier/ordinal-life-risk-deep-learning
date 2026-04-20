@@ -31,6 +31,8 @@ def train_one(
     X_val: np.ndarray,
     y_val: np.ndarray,
     data_cfg: DataConfig,
+    X_fit: np.ndarray | None = None,
+    y_fit: np.ndarray | None = None,
 ) -> None:
     model_cfg = MODEL_CONFIGS[model_name]
 
@@ -51,7 +53,7 @@ def train_one(
     model_cls = MODEL_REGISTRY[model_name]
     model = model_cls(input_dim=input_dim, config=model_cfg)
     qwk_raw, qwk_offset, acc_raw, acc_offset, _, history = run_training(
-        model, X_train, y_train, X_val, y_val
+        model, X_train, y_train, X_val, y_val, X_fit=X_fit, y_fit=y_fit
     )
 
     summary_lines = [
@@ -126,7 +128,8 @@ def main() -> None:
         X_train_aug = np.concatenate([X_train_folder] + X_synth_parts, axis=0)
         y_train_aug = np.concatenate([y_train_folder] + y_synth_parts, axis=0)
 
-        train_one(data_cfg.model, dataset_name, X_train_aug, y_train_aug, X_val_folder, y_val_folder, data_cfg)
+        train_one(data_cfg.model, dataset_name, X_train_aug, y_train_aug, X_val_folder, y_val_folder, data_cfg,
+                  X_fit=X_train_folder, y_fit=y_train_folder)
 
 
 if __name__ == "__main__":
