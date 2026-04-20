@@ -14,12 +14,8 @@ class DataConfig:
     test_raw: str = os.path.join(_DATASET_PATH, "test.csv", "test.csv")
     train_clean: str = os.path.join(_DATASET_PATH, "train_clean.csv")
     test_clean: str = os.path.join(_DATASET_PATH, "test_clean.csv")
-    output_dir: str = _DATASET_PATH
     log_dir: str = os.path.join(_CURRENT_PATH, "logs")
-    # Utiliser les CSV déjà nettoyés si disponibles
     use_cached: bool = True
-    # Réentraîner sur l'ensemble complet après la phase de validation
-    retrain: bool = False
     val_size: float = 0.2
     random_state: int = 42
     num_classes: int = NUM_CLASSES
@@ -37,7 +33,7 @@ class TabNetConfig:
     lr: float = 2e-3
     batch_size: int = 1024
     virtual_batch_size: int = 256
-    epochs: int = 100
+    epochs: int = 5
     early_stopping_patience: int = 15
 
 
@@ -50,7 +46,7 @@ class TabMConfig:
     lr: float = 2e-3
     weight_decay: float = 3e-4
     batch_size: int = 1024
-    epochs: int = 100
+    epochs: int = 5
     early_stopping_patience: int = 15
     use_embeddings: bool = True
     n_bins: int = 48

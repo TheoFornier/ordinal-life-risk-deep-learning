@@ -10,10 +10,9 @@ if os.environ.get("PYTHONUNBUFFERED") != "1":
 from sklearn.model_selection import train_test_split
 from config import DataConfig, MODEL_CONFIGS
 from logging_utils import setup_logging, get_logger
-from metrics import optimize_offsets, qwk as _qwk, apply_offsets as _apply
 from models import MODEL_REGISTRY
 from preprocessing import load_data
-from trainer import run_training, generate_submission
+from trainer import run_training
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -43,7 +42,7 @@ def main() -> None:
     print(f"Model: {args.model} | Config: {model_cfg}")
 
     print("Loading data...")
-    X_all, y_all, X_test, ids_test = load_data(
+    X_all, y_all, _, _ = load_data(
         train_raw=data_cfg.train_raw,
         test_raw=data_cfg.test_raw,
         train_clean=data_cfg.train_clean,
@@ -51,7 +50,7 @@ def main() -> None:
         use_cached=data_cfg.use_cached,
         random_state=data_cfg.random_state,
     )
-    print(f"Train: {X_all.shape} | Test: {X_test.shape}")
+    print(f"Train: {X_all.shape}")
     input_dim = X_all.shape[1]
 
     X_train, X_val, y_train, y_val = train_test_split(
@@ -65,52 +64,19 @@ def main() -> None:
 
     model_cls = MODEL_REGISTRY[args.model]
     model = model_cls(input_dim=input_dim, config=model_cfg)
-    qwk_raw, qwk_offset, offsets = run_training(model, X_train, y_train, X_val, y_val)
-
-    submission_path = os.path.join(data_cfg.output_dir, f"submission_dl_{args.model}.csv")
-
-    if data_cfg.retrain:
-        print("Retraining on full dataset...")
-        full_model = model_cls(input_dim=input_dim, config=model_cfg)
-        full_model.fit(X_all, y_all, X_val, y_val)
-
-        val_preds_full = full_model.predict(X_val)
-        offsets_full = optimize_offsets(val_preds_full, y_val)
-        qwk_raw_full = _qwk(val_preds_full, y_val)
-        qwk_offset_full = _qwk(_apply(val_preds_full, offsets_full), y_val)
-
-        generate_submission(full_model, X_test, ids_test, offsets_full, submission_path)
-    else:
-        qwk_raw_full = qwk_raw
-        qwk_offset_full = qwk_offset
-        offsets_full = offsets
-        generate_submission(model, X_test, ids_test, offsets, submission_path)
-
-    BOOSTING_BASELINE = 0.6544
-    delta = qwk_offset_full - BOOSTING_BASELINE
-    delta_str = f"+{delta:.4f}" if delta >= 0 else f"{delta:.4f}"
+    qwk_raw, qwk_offset = run_training(model, X_train, y_train, X_val, y_val)
 
     summary_lines = [
         "=" * 50,
         f"  RESULTS — {args.model}",
         "=" * 50,
-        f"  QWK val raw  (80% split):   {qwk_raw:>8.4f}",
-        f"  QWK val+off  (80% split):   {qwk_offset:>8.4f}",
-    ]
-    if data_cfg.retrain:
-        summary_lines += [
-            f"  QWK val raw  (retrain):     {qwk_raw_full:>8.4f}",
-            f"  QWK val+off  (retrain):     {qwk_offset_full:>8.4f}",
-        ]
-    summary_lines += [
-        "-" * 50,
-        f"  Boosting baseline:           {BOOSTING_BASELINE:>8.4f}",
-        f"  Delta vs baseline:           {delta_str:>8}",
+        f"  QWK val raw:                 {qwk_raw:>8.4f}",
+        f"  QWK val+offsets:             {qwk_offset:>8.4f}",
         "=" * 50,
     ]
 
     summary = "\n".join(summary_lines)
-    print(summary)
+    print(summary, flush=True)
     logger.info(summary)
 
 
