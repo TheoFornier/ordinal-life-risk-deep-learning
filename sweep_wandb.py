@@ -108,7 +108,7 @@ if __name__ == "__main__":
     sweep_id = wandb.sweep(sweep_config, project="GLO7030-Prudential")
 
     # Lancer l'agent — 30 combinaisons
-    print(f"\n🚀 Lancement du sweep : {sweep_id}")
+    print(f"\nLancement du sweep : {sweep_id}")
     print("30 combinaisons vont être testées automatiquement (devrait prendre ~15-20 min)...")
     print("Tu peux suivre l'avancée en temps réel sur W&B !\n")
 

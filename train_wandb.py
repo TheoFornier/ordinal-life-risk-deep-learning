@@ -296,6 +296,16 @@ def main():
     wandb.log({"Threshold_Optimization": wandb.Image(plt)})
     plt.close() # Nettoyer la mémoire
 
+    # --- Sauvegarder les prédictions de validation ---
+    print("\nSauvegarde des prédictions de validation...")
+    val_submission = pd.DataFrame({
+        "True_Response": y_val,
+        "Pred_Response": val_offset if config["use_offsets"] else np.clip(np.round(val_preds), 1, 8).astype(int)
+    })
+    val_submission_path = os.path.join(DATA_DIR, f"val_predictions_{config['model_type']}.csv")
+    val_submission.to_csv(val_submission_path, index=False)
+    print(f"Prédictions de validation sauvegardées : {val_submission_path}")
+
     # --- Générer la soumission ---
     print("\nGénération de la soumission...")
     if config["model_type"] == "XGBoost":
@@ -341,7 +351,7 @@ def main():
     wandb.log_artifact(artifact)
 
     wandb.finish()
-    print("\n✅ Run terminée et synchronisée sur W&B !")
+    print("\n Run terminée et synchronisée sur W&B !")
 
 
 if __name__ == "__main__":
