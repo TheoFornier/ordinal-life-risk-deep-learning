@@ -10,12 +10,18 @@ NUM_CLASSES = 8
 @dataclass
 class DataConfig:
     model: str = "tabm"  # "tabm" or "tabnet"
-    run_base_training: bool = False
+    run_base_training: bool = True
     synth_sample_weight: float = 0.5  # loss weight for synthetic rows (1.0 = same as real)
     max_synth_ratio: float = 1.0  # max synthetic rows as a multiple of real train rows (e.g. 0.5 = half as many)
     train_path: str = "../prudential-life-insurance-assessment/train_clean.csv"
     synthetic_datasets: list[str] = field(default_factory=lambda: [
+        "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_ctgan_strategy_a",
         "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_ctgan_strategy_b",
+        "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_strategy_a",
+        "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_strategy_b",
+        "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_tvae_strategy_a",
+        "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_tvae_strategy_b",
+        "../prudential-life-insurance-assessment/synthetic/cleaned/gptband0eal",
     ])
     results_dir: str = os.path.join(_CURRENT_PATH, "results")
     random_state: int = 42
@@ -35,7 +41,7 @@ class TabNetConfig:
     batch_size: int = 1024
     virtual_batch_size: int = 256
     epochs: int = 200
-    early_stopping_patience: int = 10
+    early_stopping_patience: int = 15
 
 
 @dataclass
@@ -48,7 +54,7 @@ class TabMConfig:
     weight_decay: float = 3e-4
     batch_size: int = 1024
     epochs: int = 100
-    early_stopping_patience: int = 10
+    early_stopping_patience: int = 15
     use_embeddings: bool = True
     n_bins: int = 48
     d_embedding: int = 16
