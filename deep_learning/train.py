@@ -61,6 +61,7 @@ def train_one(
     X_fit: np.ndarray | None = None,
     y_fit: np.ndarray | None = None,
     sample_weight: np.ndarray | None = None,
+    test_path: str | None = None,
 ) -> None:
     model_cfg = MODEL_CONFIGS[model_name]
 
@@ -105,7 +106,7 @@ def train_one(
         qwk_raw, qwk_offset, acc_raw, acc_offset,
     )
 
-    generate_submission(model, offsets, data_cfg.test_path, run_dir, dataset_name, model_name)
+    generate_submission(model, offsets, test_path or data_cfg.test_path, run_dir, dataset_name, model_name)
 
 
 def main() -> None:
@@ -187,8 +188,10 @@ def main() -> None:
         X_train_aug = np.concatenate([X_train_folder] + X_synth_parts, axis=0)
         y_train_aug = np.concatenate([y_train_folder] + y_synth_parts, axis=0)
 
+        synth_test_path = os.path.join(synth_folder, "test_clean.csv")
         train_one(data_cfg.model, dataset_name, X_train_aug, y_train_aug, X_val_folder, y_val_folder, data_cfg,
-                  X_fit=X_train_folder, y_fit=y_train_folder, sample_weight=sample_weight)
+                  X_fit=X_train_folder, y_fit=y_train_folder, sample_weight=sample_weight,
+                  test_path=synth_test_path)
 
 
 if __name__ == "__main__":
