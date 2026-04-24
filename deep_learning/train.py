@@ -23,6 +23,33 @@ def load_data(data_path: str) -> tuple[np.ndarray, np.ndarray]:
 
 
 
+def load_test_data(test_path: str) -> tuple[pd.DataFrame, np.ndarray]:
+    df = pd.read_csv(test_path)
+    ids = df["Id"]
+    feature_cols = [c for c in df.columns if c != "Response"]
+    X = df[feature_cols].values.astype(np.float32)
+    return ids, X
+
+
+def generate_submission(
+    model,
+    offsets: np.ndarray,
+    test_path: str,
+    run_dir: str,
+    dataset_name: str,
+    model_name: str,
+) -> None:
+    from metrics import apply_offsets
+    ids, X_test = load_test_data(test_path)
+    raw_preds = model.predict(X_test)
+    preds = apply_offsets(raw_preds, offsets)
+    preds_int = np.clip(np.round(preds).astype(int), 1, 8)
+    submission = pd.DataFrame({"Id": ids, "Response": preds_int})
+    out_path = os.path.join(run_dir, f"submission_{dataset_name}_{model_name}.csv")
+    submission.to_csv(out_path, index=False)
+    print(f"Submission saved: {out_path}", flush=True)
+
+
 def train_one(
     model_name: str,
     dataset_name: str,
@@ -53,7 +80,7 @@ def train_one(
     input_dim = X_train.shape[1]
     model_cls = MODEL_REGISTRY[model_name]
     model = model_cls(input_dim=input_dim, config=model_cfg)
-    qwk_raw, qwk_offset, acc_raw, acc_offset, _, history = run_training(
+    qwk_raw, qwk_offset, acc_raw, acc_offset, offsets, history = run_training(
         model, X_train, y_train, X_val, y_val, X_fit=X_fit, y_fit=y_fit, sample_weight=sample_weight
     )
 
@@ -77,6 +104,8 @@ def train_one(
         run_dir, model_name, dataset_name, model_cfg, data_cfg, history,
         qwk_raw, qwk_offset, acc_raw, acc_offset,
     )
+
+    generate_submission(model, offsets, data_cfg.test_path, run_dir, dataset_name, model_name)
 
 
 def main() -> None:
@@ -127,6 +156,16 @@ def main() -> None:
             Xs, ys = load_data(os.path.join(synth_folder, fname))
             X_synth_parts.append(Xs)
             y_synth_parts.append(ys)
+
+        if data_cfg.max_synth_val_ratio > 0 and X_synth_parts:
+            X_synth_all_val = np.concatenate(X_synth_parts, axis=0)
+            y_synth_all_val = np.concatenate(y_synth_parts, axis=0)
+            n_val_synth = min(len(X_synth_all_val), int(len(X_val_folder) * data_cfg.max_synth_val_ratio))
+            rng_val = np.random.default_rng(data_cfg.random_state)
+            val_idx = rng_val.choice(len(X_synth_all_val), size=n_val_synth, replace=False)
+            X_val_folder = np.concatenate([X_val_folder, X_synth_all_val[val_idx]], axis=0)
+            y_val_folder = np.concatenate([y_val_folder, y_synth_all_val[val_idx]], axis=0)
+            print(f"Val set augmented with {n_val_synth:,} synthetic rows ({data_cfg.max_synth_val_ratio}× real val)", flush=True)
 
         n_real = len(X_train_folder)
         n_synth = sum(len(x) for x in X_synth_parts)
