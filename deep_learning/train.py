@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from config import DataConfig, MODEL_CONFIGS
 from logging_utils import setup_logging, get_logger
 from models import MODEL_REGISTRY
-from results_utils import save_results
+from results_utils import save_results, save_distribution_plot, save_per_class_accuracy_plot
 from trainer import run_training
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -105,6 +105,16 @@ def train_one(
         run_dir, model_name, dataset_name, model_cfg, data_cfg, history,
         qwk_raw, qwk_offset, acc_raw, acc_offset,
     )
+
+    y_real_train = y_fit if y_fit is not None else y_train
+    y_synth_train = y_train[len(y_fit):] if y_fit is not None else None
+    X_synth_train = X_train[len(X_fit):] if X_fit is not None else None
+
+    save_distribution_plot(run_dir, y_real_train, y_synth_train)
+
+    val_preds = model.predict(X_val)
+    preds_synth = model.predict(X_synth_train) if X_synth_train is not None and len(X_synth_train) > 0 else None
+    save_per_class_accuracy_plot(run_dir, val_preds, y_val, preds_synth, y_synth_train)
 
     generate_submission(model, offsets, test_path or data_cfg.test_path, run_dir, dataset_name, model_name)
 

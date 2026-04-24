@@ -2,9 +2,11 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from config import NUM_CLASSES
 
 
 def save_results(
@@ -68,3 +70,71 @@ def save_results(
     plt.close(fig)
 
     print(f"Results saved: {run_dir}", flush=True)
+
+
+def save_distribution_plot(
+    run_dir: str,
+    y_real: np.ndarray,
+    y_synth: np.ndarray | None = None,
+) -> None:
+    classes = list(range(1, NUM_CLASSES + 1))
+    x = np.arange(len(classes))
+    to_int = lambda y: np.clip(np.round(y), 1, NUM_CLASSES).astype(int)
+    real_counts = [int(np.sum(to_int(y_real) == c)) for c in classes]
+
+    fig, ax = plt.subplots(figsize=(9, 4))
+    fig.suptitle("Training data — Response distribution", fontsize=13)
+    if y_synth is not None and len(y_synth) > 0:
+        synth_counts = [int(np.sum(to_int(y_synth) == c)) for c in classes]
+        w = 0.4
+        ax.bar(x - w / 2, real_counts, width=w, label="Real", color="steelblue")
+        ax.bar(x + w / 2, synth_counts, width=w, label="Synthetic", color="coral")
+    else:
+        ax.bar(x, real_counts, color="steelblue", label="Real")
+    ax.set_xticks(x)
+    ax.set_xticklabels(classes)
+    ax.set_xlabel("Response")
+    ax.set_ylabel("Count")
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+    plt.savefig(os.path.join(run_dir, "distribution.png"), dpi=150)
+    plt.close(fig)
+
+
+def save_per_class_accuracy_plot(
+    run_dir: str,
+    preds_real: np.ndarray,
+    y_real: np.ndarray,
+    preds_synth: np.ndarray | None = None,
+    y_synth: np.ndarray | None = None,
+) -> None:
+    classes = list(range(1, NUM_CLASSES + 1))
+    x = np.arange(len(classes))
+
+    def per_class_acc(preds: np.ndarray, y_true: np.ndarray) -> list[float]:
+        p = np.clip(np.round(preds), 1, NUM_CLASSES).astype(int)
+        t = np.clip(np.round(y_true), 1, NUM_CLASSES).astype(int)
+        return [float(np.mean(p[t == c] == c)) if np.any(t == c) else float("nan") for c in classes]
+
+    real_accs = per_class_acc(preds_real, y_real)
+
+    fig, ax = plt.subplots(figsize=(9, 4))
+    fig.suptitle("Per-class accuracy — validation", fontsize=13)
+    if preds_synth is not None and y_synth is not None and len(y_synth) > 0:
+        synth_accs = per_class_acc(preds_synth, y_synth)
+        w = 0.4
+        ax.bar(x - w / 2, real_accs, width=w, label="Real val", color="steelblue")
+        ax.bar(x + w / 2, synth_accs, width=w, label="Synthetic", color="coral")
+    else:
+        ax.bar(x, real_accs, color="steelblue", label="Real val")
+    ax.set_xticks(x)
+    ax.set_xticklabels(classes)
+    ax.set_xlabel("Response")
+    ax.set_ylabel("Accuracy")
+    ax.set_ylim(0, 1.05)
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+    plt.savefig(os.path.join(run_dir, "per_class_accuracy.png"), dpi=150)
+    plt.close(fig)
