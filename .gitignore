@@ -25,11 +25,8 @@ graph_data/
 # Ignore external cloned repos
 external/
 
-# Ignore all CSV files by default, but keep CSVs in LLM, data and data_clean
+# Ignore all CSV files everywhere (no exceptions)
 *.csv
-!LLM/*.csv
-!data/*.csv
-!data_clean/*.csv
 
 # OS files
 .DS_Store

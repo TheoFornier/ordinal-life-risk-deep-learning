@@ -21,6 +21,9 @@ Structure du dépôt
 - `LLM/` : dataset générés par LLM.
 - `data/` : données brutes 
 - `data_clean/` : données nettoyées prêtes pour entraînement
+ - `LLM/` : jeux de données produits par LLM (CSV)
+ - `data/` : données brutes
+ - `data_clean/` : données nettoyées prêtes pour entraînement
 - `dataset_cleaning.ipynb`, `data_repartition.ipynb` : notebooks d'exploration et préparation
 - `evaluation/` : scripts d'évaluation quantitatives des générateurs (`test_synth_quality.py`, `evaluate_generators.py`)
 - `external/` clonage du code de Tabsyn : https://github.com/amazon-science/tabsyn
@@ -51,5 +54,9 @@ python evaluation/test_synth_quality.py --real data_clean/train_clean.csv --synt
 Sorties
 - `ctgan/outputs/` et `tvae/outputs/` contiennent les fichiers `synthetic_*` et `models/`.
 - `evaluation/outputs/` contient les rapports d'évaluation comparant générateurs et stratégies.
+
+Note sur les CSV
+- Les CSV présents dans `LLM/` ne sont pas inclus dans le dépôt par défaut (ils peuvent être reproduits en relançant les prompts décrits dans les fichiers de `LLM/`).
+- Les CSV de `data/` et `data_clean/` doivent être obtenus en téléchargeant le jeu de données depuis Kaggle (https://www.kaggle.com/competitions/prudential-life-insurance-assessment/data) puis en exécutant le nettoyage (voir `dataset_cleaning.ipynb` / scripts de préparation). Ils ne sont pas fournis ici pour alléger le dépôt.
 
 
