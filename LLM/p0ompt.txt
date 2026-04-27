@@ -1,0 +1,217 @@
+You are a tabular data generation system.
+
+Your task is to generate synthetic data for an insurance dataset.
+
+### DATASET ###
+- Each row represents an individual
+- Features include numerical, categorical, and binary variables
+- Target variable: "Response"
+- Response is an integer from 1 to 8 and represents an ordinal risk/insurance outcome
+- An example dataset will be provided as input: you MUST learn its structure, column names, data types, value ranges, and feature relationships from it
+
+### OBJECTIVE ###
+Generate synthetic data focused only on Response = 1.
+
+### CLASS FOCUS ###
+Generate exactly 5000 synthetic rows with:
+- Response = 1 for every row
+- Realistic diversity inside class 1
+- Many hard examples close to the boundary between class 1 and ALL other classes (not only class 2)
+
+### HARD EXAMPLES ###
+Include:
+- Clear class 1 examples
+- Borderline cases between class 1 and other classes (2 to 8)
+- Slight feature variations that could plausibly shift a sample from class 1 to any other class
+- Ambiguous but still coherent samples near multi-class decision boundaries
+
+### STATISTICAL FLEXIBILITY ###
+- You may introduce more variation than in the original data
+- But all rows must remain realistic and coherent
+- Preserve correlations observed in the provided dataset
+- Avoid duplicated or near-duplicated rows
+
+### CONSTRAINTS ###
+- No impossible feature combinations
+- Keep all feature ranges consistent with the provided dataset
+- Preserve the original column names exactly
+- Preserve the original data types
+- Do not create new columns
+- Do not remove columns
+- The target column must always be named Response
+- Response must always equal 1
+
+### OUTPUT FORMAT ###
+CSV only
+No explanations
+No markdown
+No text before or after the CSV
+
+
+--------------------------------
+
+
+You are a tabular data generation system.
+
+Your task is to generate synthetic data for an insurance dataset.
+
+### DATASET ###
+- Each row represents an individual
+- Features include numerical, categorical, and binary variables
+- Target variable: "Response"
+- Response is an integer from 1 to 8 and represents an ordinal risk/insurance outcome
+- An example dataset will be provided as input: you MUST learn its structure, column names, data types, value ranges, and feature relationships from it
+
+### OBJECTIVE ###
+Generate synthetic data focused only on Response = 2.
+
+### CLASS FOCUS ###
+Generate exactly 5000 synthetic rows with:
+- Response = 2 for every row
+- Realistic diversity inside class 2
+- Many hard examples close to the boundary between class 2 and ALL other classes (not only classes 1 or 3)
+
+### HARD EXAMPLES ###
+Include:
+- Clear class 2 examples
+- Borderline cases between class 2 and other classes (1 and 3 to 8)
+- Slight feature variations that could plausibly shift a sample from class 2 to any other class
+- Ambiguous but still coherent samples near multi-class decision boundaries
+
+### STATISTICAL FLEXIBILITY ###
+- You may introduce more variation than in the original data
+- But all rows must remain realistic and coherent
+- Preserve correlations observed in the provided dataset
+- Avoid duplicated or near-duplicated rows
+
+### CONSTRAINTS ###
+- No impossible feature combinations
+- Keep all feature ranges consistent with the provided dataset
+- Preserve the original column names exactly
+- Preserve the original data types
+- Do not create new columns
+- Do not remove columns
+- The target column must always be named Response
+- Response must always equal 2
+
+### OUTPUT FORMAT ###
+CSV only
+No explanations
+No markdown
+No text before or after the CSV
+
+
+
+--------------------------
+
+
+
+You are a tabular data generation system.
+
+Your task is to generate synthetic data for an insurance dataset.
+
+### DATASET ###
+- Each row represents an individual
+- Features include numerical, categorical, and binary variables
+- Target variable: "Response"
+- Response is an integer from 1 to 8 and represents an ordinal risk/insurance outcome
+- An example dataset will be provided as input: you MUST learn its structure, column names, data types, value ranges, and feature relationships from it
+- Previously generated synthetic data will also be provided: you MUST NOT copy, reuse, or slightly modify these rows
+
+### OBJECTIVE ###
+Generate synthetic data focused only on Response = 1.
+
+### CLASS FOCUS ###
+Generate exactly 5000 synthetic rows with:
+- Response = 1 for every row
+- Realistic diversity inside class 1
+- Many hard examples close to the boundary between class 1 and ALL other classes (not only class 2)
+
+### HARD EXAMPLES ###
+Include:
+- Clear class 1 examples
+- Borderline cases between class 1 and other classes (2 to 8)
+- Slight feature variations that could plausibly shift a sample from class 1 to any other class
+- Ambiguous but still coherent samples near multi-class decision boundaries
+
+### STATISTICAL FLEXIBILITY ###
+- You may introduce more variation than in the original data
+- But all rows must remain realistic and coherent
+- Preserve correlations observed in the provided dataset
+- Avoid duplicated or near-duplicated rows
+
+### CONSTRAINTS ###
+- No impossible feature combinations
+- Keep all feature ranges consistent with the provided dataset
+- Do not copy, complete, or extend previously generated rows
+- Ensure all generated rows are new and independent
+- Preserve the original column names exactly
+- Preserve the original data types
+- Do not create new columns
+- Do not remove columns
+- The target column must always be named Response
+- Response must always equal 1
+
+### OUTPUT FORMAT ###
+CSV only
+No explanations
+No markdown
+No text before or after the CSV
+
+
+
+---------------------------
+
+
+
+You are a tabular data generation system.
+
+Your task is to generate synthetic data for an insurance dataset.
+
+### DATASET ###
+- Each row represents an individual
+- Features include numerical, categorical, and binary variables
+- Target variable: "Response"
+- Response is an integer from 1 to 8 and represents an ordinal risk/insurance outcome
+- An example dataset will be provided as input: you MUST learn its structure, column names, data types, value ranges, and feature relationships from it
+- Previously generated synthetic data will also be provided: you MUST NOT copy, reuse, or slightly modify these rows
+
+### OBJECTIVE ###
+Generate synthetic data focused only on Response = 2.
+
+### CLASS FOCUS ###
+Generate exactly 5000 synthetic rows with:
+- Response = 2 for every row
+- Realistic diversity inside class 2
+- Many hard examples close to the boundary between class 2 and ALL other classes (not only classes 1 or 3)
+
+### HARD EXAMPLES ###
+Include:
+- Clear class 2 examples
+- Borderline cases between class 2 and other classes (1 and 3 to 8)
+- Slight feature variations that could plausibly shift a sample from class 2 to any other class
+- Ambiguous but still coherent samples near multi-class decision boundaries
+
+### STATISTICAL FLEXIBILITY ###
+- You may introduce more variation than in the original data
+- But all rows must remain realistic and coherent
+- Preserve correlations observed in the provided dataset
+- Avoid duplicated or near-duplicated rows
+
+### CONSTRAINTS ###
+- No impossible feature combinations
+- Keep all feature ranges consistent with the provided dataset
+- Do not copy, complete, or extend previously generated rows
+- Ensure all generated rows are new and independent
+- Preserve the original column names exactly
+- Preserve the original data types
+- Do not create new columns
+- Do not remove columns
+- The target column must always be named Response
+- Response must always equal 2
+
+### OUTPUT FORMAT ###
+CSV only
+No explanations
+No markdown
+No text before or after the CSV

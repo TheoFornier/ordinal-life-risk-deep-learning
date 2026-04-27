@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+.venv_tabsyn/
+
+# Logs and caches
+.pytest_cache/
+.mypy_cache/
+.cache/
+
+# Ignore outputs and models directories
+ctgan/outputs/
+tvae/outputs/
+tabsyn/outputs/
+evaluation/outputs/
+
+# Ignore graph data visuals
+graph_data/
+
+# Ignore external cloned repos
+external/
+
+# Ignore all CSV files by default, but keep CSVs in LLM, data and data_clean
+*.csv
+!LLM/*.csv
+!data/*.csv
+!data_clean/*.csv
+
+# OS files
+.DS_Store
+Thumbs.db
