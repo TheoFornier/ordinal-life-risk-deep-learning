@@ -76,6 +76,8 @@ def save_distribution_plot(
     run_dir: str,
     y_real: np.ndarray,
     y_synth: np.ndarray | None = None,
+    title: str = "Training data — Response distribution",
+    filename: str = "distribution.png",
 ) -> None:
     classes = list(range(1, NUM_CLASSES + 1))
     x = np.arange(len(classes))
@@ -83,7 +85,7 @@ def save_distribution_plot(
     real_counts = [int(np.sum(to_int(y_real) == c)) for c in classes]
 
     fig, ax = plt.subplots(figsize=(9, 4))
-    fig.suptitle("Training data — Response distribution", fontsize=13)
+    fig.suptitle(title, fontsize=13)
     if y_synth is not None and len(y_synth) > 0:
         synth_counts = [int(np.sum(to_int(y_synth) == c)) for c in classes]
         w = 0.4
@@ -98,7 +100,7 @@ def save_distribution_plot(
     ax.legend()
     ax.grid(True, alpha=0.3, axis="y")
     plt.tight_layout()
-    plt.savefig(os.path.join(run_dir, "distribution.png"), dpi=150)
+    plt.savefig(os.path.join(run_dir, filename), dpi=150)
     plt.close(fig)
 
 
@@ -125,7 +127,7 @@ def save_per_class_accuracy_plot(
         synth_accs = per_class_acc(preds_synth, y_synth)
         w = 0.4
         ax.bar(x - w / 2, real_accs, width=w, label="Real val", color="steelblue")
-        ax.bar(x + w / 2, synth_accs, width=w, label="Synthetic", color="coral")
+        ax.bar(x + w / 2, synth_accs, width=w, label="Synthetic val", color="coral")
     else:
         ax.bar(x, real_accs, color="steelblue", label="Real val")
     ax.set_xticks(x)

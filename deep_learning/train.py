@@ -62,6 +62,7 @@ def train_one(
     y_fit: np.ndarray | None = None,
     sample_weight: np.ndarray | None = None,
     test_path: str | None = None,
+    n_val_real: int | None = None,
 ) -> None:
     model_cfg = MODEL_CONFIGS[model_name]
 
@@ -112,9 +113,19 @@ def train_one(
 
     save_distribution_plot(run_dir, y_real_train, y_synth_train)
 
+    n_real_val = n_val_real if n_val_real is not None else len(y_val)
+    y_val_real_plot = y_val[:n_real_val]
+    y_val_synth_plot = y_val[n_real_val:] if n_real_val < len(y_val) else None
+    save_distribution_plot(
+        run_dir, y_val_real_plot, y_val_synth_plot,
+        title="Validation data — Response distribution",
+        filename="distribution_val.png",
+    )
+
     val_preds = model.predict(X_val)
-    preds_synth = model.predict(X_synth_train) if X_synth_train is not None and len(X_synth_train) > 0 else None
-    save_per_class_accuracy_plot(run_dir, val_preds, y_val, preds_synth, y_synth_train)
+    preds_val_real = val_preds[:n_real_val]
+    preds_val_synth = val_preds[n_real_val:] if n_real_val < len(val_preds) else None
+    save_per_class_accuracy_plot(run_dir, preds_val_real, y_val_real_plot, preds_val_synth, y_val_synth_plot)
 
     generate_submission(model, offsets, test_path or data_cfg.test_path, run_dir, dataset_name, model_name)
 
@@ -168,28 +179,40 @@ def main() -> None:
             X_synth_parts.append(Xs)
             y_synth_parts.append(ys)
 
-        if data_cfg.max_synth_val_ratio > 0 and X_synth_parts:
-            X_synth_all_val = np.concatenate(X_synth_parts, axis=0)
-            y_synth_all_val = np.concatenate(y_synth_parts, axis=0)
-            n_val_synth = min(len(X_synth_all_val), int(len(X_val_folder) * data_cfg.max_synth_val_ratio))
+        n_val_real = len(X_val_folder)
+        X_synth_all = np.concatenate(X_synth_parts, axis=0)
+        y_synth_all = np.concatenate(y_synth_parts, axis=0)
+        val_synth_mask = np.zeros(len(X_synth_all), dtype=bool)
+        if data_cfg.max_synth_val_ratio > 0 and len(X_synth_all) > 0:
+            n_val_synth = min(len(X_synth_all), int(n_val_real * data_cfg.max_synth_val_ratio))
             rng_val = np.random.default_rng(data_cfg.random_state)
-            val_idx = rng_val.choice(len(X_synth_all_val), size=n_val_synth, replace=False)
-            X_val_folder = np.concatenate([X_val_folder, X_synth_all_val[val_idx]], axis=0)
-            y_val_folder = np.concatenate([y_val_folder, y_synth_all_val[val_idx]], axis=0)
+            val_idx = rng_val.choice(len(X_synth_all), size=n_val_synth, replace=False)
+            val_synth_mask[val_idx] = True
+            X_val_folder = np.concatenate([X_val_folder, X_synth_all[val_idx]], axis=0)
+            y_val_folder = np.concatenate([y_val_folder, y_synth_all[val_idx]], axis=0)
             print(f"Val set augmented with {n_val_synth:,} synthetic rows ({data_cfg.max_synth_val_ratio}× real val)", flush=True)
-
+        # Exclude rows already in val from the training pool to prevent data leak
+        X_synth_all = X_synth_all[~val_synth_mask]
+        y_synth_all = y_synth_all[~val_synth_mask]
+        rng = np.random.default_rng(data_cfg.random_state)
+        kept = []
+        for c in range(1, data_cfg.num_classes + 1):
+            real_count = int(np.sum(y_train_folder.astype(int) == c))
+            max_c = int(real_count * data_cfg.max_synth_ratio)
+            idx_c = np.where(y_synth_all.astype(int) == c)[0]
+            if len(idx_c) > max_c:
+                idx_c = rng.choice(idx_c, size=max_c, replace=False)
+            kept.append(idx_c)
+        kept_idx = np.concatenate(kept)
+        X_synth_parts = [X_synth_all[kept_idx]]
+        y_synth_parts = [y_synth_all[kept_idx]]
+        n_synth = len(kept_idx)
+        print(
+            f"Synthetic rows after per-class cap ({data_cfg.max_synth_ratio}× real per class): "
+            f"{n_synth:,} kept of {len(y_synth_all):,}",
+            flush=True,
+        )
         n_real = len(X_train_folder)
-        n_synth = sum(len(x) for x in X_synth_parts)
-        max_synth = int(n_real * data_cfg.max_synth_ratio)
-        if n_synth > max_synth:
-            X_synth_all = np.concatenate(X_synth_parts, axis=0)
-            y_synth_all = np.concatenate(y_synth_parts, axis=0)
-            rng = np.random.default_rng(data_cfg.random_state)
-            idx = rng.choice(n_synth, size=max_synth, replace=False)
-            X_synth_parts = [X_synth_all[idx]]
-            y_synth_parts = [y_synth_all[idx]]
-            n_synth = max_synth
-            print(f"Synthetic rows capped at {max_synth:,} ({data_cfg.max_synth_ratio}× real)", flush=True)
         sample_weight = np.concatenate([
             np.ones(n_real, dtype=np.float32),
             np.full(n_synth, data_cfg.synth_sample_weight, dtype=np.float32),
@@ -201,7 +224,7 @@ def main() -> None:
         synth_test_path = os.path.join(synth_folder, "test_clean.csv")
         train_one(data_cfg.model, dataset_name, X_train_aug, y_train_aug, X_val_folder, y_val_folder, data_cfg,
                   X_fit=X_train_folder, y_fit=y_train_folder, sample_weight=sample_weight,
-                  test_path=synth_test_path)
+                  test_path=synth_test_path, n_val_real=n_val_real)
 
 
 if __name__ == "__main__":

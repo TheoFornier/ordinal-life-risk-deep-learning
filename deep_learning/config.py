@@ -10,8 +10,8 @@ NUM_CLASSES = 8
 @dataclass
 class DataConfig:
     model: str = "tabm"  # "tabm" or "tabnet"
-    run_base_training: bool = False
-    synth_sample_weight: float = 0.5  # loss weight for synthetic rows (1.0 = same as real)
+    run_base_training: bool = True
+    synth_sample_weight: float = 0.2  # loss weight for synthetic rows (1.0 = same as real)
     max_synth_ratio: float = 1.0  # max synthetic rows as a multiple of real train rows (e.g. 0.5 = half as many)
     max_synth_val_ratio: float = 0.0  # max synthetic rows added to val set as a multiple of real val rows (0.0 = disabled)
     train_path: str = "../prudential-life-insurance-assessment/train_clean.csv"
@@ -23,9 +23,11 @@ class DataConfig:
     #     "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_tvae_strategy_a",
     #     "../prudential-life-insurance-assessment/synthetic/cleaned/train_augmented_tvae_strategy_b",
     #     "../prudential-life-insurance-assessment/synthetic/cleaned/gptband0eal",
+    #     "../prudential-life-insurance-assessment/synthetic/cleaned/gpt_1",
+    #     "../prudential-life-insurance-assessment/synthetic/cleaned/gpt_2",
     # ])
     synthetic_datasets: list[str] = field(default_factory=lambda: [
-        "../prudential-life-insurance-assessment/synthetic/cleaned/gptband0eal",
+        "../prudential-life-insurance-assessment/synthetic/cleaned/gpt_goodclassfocus",
     ])
     test_path: str = "../prudential-life-insurance-assessment/test_clean.csv"
     results_dir: str = os.path.join(_CURRENT_PATH, "results")
@@ -54,12 +56,12 @@ class TabMConfig:
     k: int = 32
     n_blocks: int = 3
     d_block: int = 512
-    dropout: float = 0.1
+    dropout: float = 0.25
     lr: float = 1e-3
-    weight_decay: float = 3e-4
+    weight_decay: float = 1e-3
     batch_size: int = 1024
-    epochs: int = 10
-    early_stopping_patience: int = 15
+    epochs: int = 15
+    early_stopping_patience: int = 7
     use_embeddings: bool = True
     n_bins: int = 48
     d_embedding: int = 16
