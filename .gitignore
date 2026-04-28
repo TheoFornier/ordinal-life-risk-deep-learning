@@ -2,5 +2,5 @@
 __pycache__/
 logs/
 prudential-life-insurance-assessment/synthetic/*.csv
-prudential-life-insurance-assessment/synthetic/cleaned/*.csv
+prudential-life-insurance-assessment/synthetic/cleaned/
 results/
