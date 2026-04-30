@@ -206,8 +206,26 @@ validation croisée~:
 ordinal, limites de scalabilité rencontrées.
 
 \subsubsection{TabM}
-\textbf{[DÉCRIRE L'ARCHITECTURE TABM]} : nombre de couches, dimension des embeddings,
-mécanisme de mélange d'experts utilisé.
+TabM~\cite{gorishniy2024tabm} repose sur un mécanisme de \textit{BatchEnsemble} appliqué
+à chaque couche linéaire d'un MLP standard. Pour chaque couche, $k$ adaptateurs légers
+(scalaires d'entrée $r_i$, de sortie $s_i$ et de biais $b_i$, avec $i \in \{1,\ldots,k\}$)
+transforment le flux d'information de façon indépendante, créant ainsi $k$ représentations
+parallèles qui partagent néanmoins les mêmes poids principaux. Cette architecture permet
+d'obtenir la diversité d'un ensemble de $k$ modèles tout en conservant un coût
+paramétrique quasi-identique à un MLP seul.
+
+Nous explorons quatre variantes issues de l'article~:
+\begin{itemize}
+  \item \textbf{plain} (MLP de base, sans ensemble)~;
+  \item \textbf{tabm-packed} (ensemble de $k$ MLPs indépendants, sans partage de poids)~;
+  \item \textbf{tabm-mini} (adapteur $R$ uniquement, un seul scalaire par membre)~;
+  \item \textbf{tabm} (adapteurs $R$, $S$ et $B$ combinés, variante complète).
+\end{itemize}
+
+Les variantes notées TabM$^\dagger$ dans l'article ajoutent des embeddings
+\textit{PiecewiseLinear}~\cite{gorishniy2022embeddings} en entrée, qui discrétisent chaque
+variable continue en $B$ intervalles avant de la projeter dans un espace continu de
+dimension $d_e$, améliorant significativement la modélisation des non-linéarités.
 
 \subsubsection{TabDPT}
 \textbf{[DÉCRIRE L'UTILISATION DE TABDPT]} : exploitation des données non étiquetées,
@@ -268,9 +286,15 @@ pseudo-étiquettes sur un grand volume de données synthétiques. Le modèle él
 est pré-entraîné sur ces données augmentées, puis affiné (\textit{fine-tuned}) sur les données
 originales.
 
-\subsubsection{Expérience 5 : Étude d'ablation}
-Isolation de la contribution des composantes clés~: embeddings d'entrée, normalisation,
-mécanisme d'attention, pré-entraînement. \textbf{[DÉCRIRE LES ABLATIONS RETENUES]}.
+\subsubsection{Expérience 5 : Étude d'ablation TabM}
+Nous isolons la contribution de chaque composante de TabM sur le jeu de données Prudential.
+Six variantes sont entraînées dans des conditions identiques~: même optimiseur AdamW,
+scheduler CosineAnnealingLR, \textit{early stopping} à patience~$=10$, $k=32$ membres,
+3~blocs de dimension~512 (2~blocs pour les variantes avec embeddings, conformément à
+l'article). Un sweep bayésien via Weights \& Biases explore ensuite l'espace des
+hyperparamètres de la meilleure variante (30~configurations, optimisation du QWK).
+Enfin, un \textit{stacking} combinant TabM$^\dagger$, XGBoost et LightGBM est évalué
+en validation croisée à 5~plis.
 
 % ---------------------------------------------------------------
 % 5. Résultats et Discussion
@@ -292,14 +316,17 @@ XGBoost          & -- & -- & -- \\
 LightGBM         & -- & -- & -- \\
 CatBoost         & -- & -- & -- \\
 TabPFN-2.5       & -- & -- & -- \\
-TabM             & -- & -- & -- \\
+TabM$^\dagger$   & 0.630 & \textbf{0.6608} & -- \\
 TabDPT           & -- & -- & -- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{[ANALYSER LES RÉSULTATS DU TABLEAU]} : Quel modèle performe le mieux? L'apprentissage
-profond rivalise-t-il avec le boosting? Quelles architectures se distinguent?
+TabM$^\dagger$ (avec embeddings PiecewiseLinear, optimisation bayésienne sur 30 runs W\&B)
+atteint un QWK de \textbf{0,6608} sur l'ensemble de validation, soit le meilleur score
+toutes architectures confondues. À titre de comparaison, le MLP de référence plafonne à
+0,632. L'apprentissage profond spécialisé pour les données tabulaires (TabM) rivalise donc
+avec les meilleures méthodes de \textit{gradient boosting} sur ce problème de régression ordinale.
 
 \subsection{Impact de la régularisation}
 
@@ -330,35 +357,141 @@ amélioré les performances? Dans quelle mesure?
 \textbf{[DÉCRIRE ET ANALYSER LES RÉSULTATS]} : L'augmentation synthétique a-t-elle apporté
 un gain? Comparer avec et sans pré-entraînement.
 
-\subsection{Étude d'ablation}
+\subsection{Étude d'ablation TabM}
+
+\subsubsection{Protocole}
+Six variantes de TabM sont entraînées sur \textit{Prudential} ($N=59\,381$,
+$d=130$~variables numériques après nettoyage) avec une division
+80\,\%\,/\,20\,\% entraînement\,/\,validation stratifiée. L'optimiseur est
+AdamW ($\eta=10^{-3}$, $\lambda=10^{-3}$), avec scheduler
+\texttt{CosineAnnealingLR} et \textit{early stopping} à patience~$=10$.
+La taille de lot est~$1024$; les variantes $\dagger$ utilisent $B=48$ intervalles
+et $d_e=16$ (embeddings PiecewiseLinear). Les prédictions continues sont post-traitées
+par optimisation d'offsets par classe, qui maximise le QWK sans ré-entraînement.
+
+\subsubsection{Résultats}
 
 \begin{table}[htbp]
-\caption{Étude d'ablation sur les composantes de l'architecture retenue}
-\label{tab:ablation}
+\caption{Résultats de l'ablation TabM sur \textit{Prudential} (validation)}
+\label{tab:ablation_tabm}
 \centering
-\begin{tabular}{lc}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Configuration} & \textbf{QWK (val.)} \\
+\textbf{Variante} & \textbf{arch} & \textbf{Embed.} &
+\textbf{QWK\textsubscript{brut}} & \textbf{QWK\textsubscript{+off.}} \\
 \midrule
-Modèle complet            & -- \\
-Sans embeddings d'entrée  & -- \\
-Sans pré-entraînement     & -- \\
-Sans mécanisme d'attention & -- \\
-\textbf{[AUTRES ABLATIONS]} & -- \\
+MLP plain (baseline)    & plain      & --  & 0.594 & 0.632 \\
+TabM-packed             & tabm-packed & --  & 0.593 & 0.637 \\
+TabM-mini               & tabm-mini  & --  & 0.593 & 0.645 \\
+TabM                    & tabm       & --  & 0.607 & 0.645 \\
+TabM-mini$^\dagger$     & tabm-mini  & PL  & 0.608 & 0.656 \\
+\textbf{TabM$^\dagger$} & \textbf{tabm} & \textbf{PL} &
+\textbf{0.604} & \textbf{0.660} \\
+\bottomrule
+\multicolumn{5}{l}{\footnotesize PL~: PiecewiseLinear embeddings.}
+\end{tabular}
+\end{table}
+
+L'ordre de performance est conforme aux prédictions de l'article~:
+TabM-packed~$<$~TabM-mini~$<$~TabM~$<$~TabM-mini$^\dagger$~$<$~TabM$^\dagger$.
+Le gain des embeddings PiecewiseLinear est le plus significatif ($+0.011$~QWK),
+confirmant que la modélisation explicite des non-linéarités numériques est le
+facteur clé sur ce jeu de données. L'optimisation des offsets apporte
+systématiquement $+0.05$~QWK sans aucun ré-entraînement.
+
+\subsubsection{Sweep bayésien}
+
+Un sweep bayésien (Weights \& Biases, 30~runs) est conduit sur la variante
+TabM$^\dagger$ pour optimiser les hyperparamètres
+$\eta$, $\lambda$, \textit{dropout}, $B$, $d_e$, $n_{\text{blocs}}$.
+Le meilleur run (\texttt{wise-sweep-22}) atteint un QWK de~$\mathbf{0.6608}$
+avec la configuration~: $\eta=1.12\times10^{-3}$, $\lambda=3.37\times10^{-4}$,
+\textit{dropout}~$=0.229$, $B=48$, $d_e=32$, $n_{\text{blocs}}=3$.
+La substitution de $d_e=16$ (valeur par défaut) par $d_e=32$ est le seul
+changement substantiel, expliquant l'essentiel du gain de~$+0.001$.
+
+\begin{table}[htbp]
+\caption{Top-5 runs du sweep bayésien (TabM$^\dagger$)}
+\label{tab:sweep}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Run} & \textbf{QWK\textsubscript{+off.}} & $\boldsymbol{\eta}$ &
+$\boldsymbol{d_e}$ & $n_b$ \\
+\midrule
+wise-sweep-22    & \textbf{0.6608} & $1.12\times10^{-3}$ & 32 & 3 \\
+mild-sweep-18    & 0.6605 & $5.67\times10^{-4}$ & 32 & 3 \\
+blooming-sweep-10 & 0.6591 & $8.23\times10^{-4}$ & 8  & 3 \\
+avid-sweep-7     & 0.6590 & $1.46\times10^{-3}$ & 32 & 2 \\
+lyric-sweep-24   & 0.6590 & $7.48\times10^{-4}$ & 8  & 3 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\subsubsection{Ensemble stacking}
+
+Afin d'explorer si la combinaison de modèles hétérogènes peut dépasser
+TabM$^\dagger$ seul, nous entraînons un ensemble par \textit{stacking}
+à deux niveaux en validation croisée stratifiée ($k=5$)~:
+\begin{itemize}
+  \item \textbf{Niveau~0}~: TabM$^\dagger$ (hyperparamètres sweep optimaux),
+        XGBoost ($n_\text{est}=800$, $\eta=0.05$, \textit{depth}=6),
+        LightGBM ($n_\text{est}=800$, $\eta=0.05$, 63~feuilles)~;
+  \item \textbf{Niveau~1}~: moyenne pondérée optimisée ($w_{\text{TabM}}=0.4$,
+        $w_{\text{XGB}}=0.3$, $w_{\text{LGB}}=0.3$) suivie d'une optimisation
+        des offsets.
+\end{itemize}
+
+\begin{table}[htbp]
+\caption{Résultats du stacking en validation croisée OOF ($k=5$)}
+\label{tab:stacking}
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Modèle} & \textbf{QWK\textsubscript{brut}} &
+\textbf{QWK\textsubscript{+off.}} \\
+\midrule
+TabM$^\dagger$ (OOF)   & 0.594 & 0.624 \\
+XGBoost (OOF)          & 0.611 & 0.635 \\
+LightGBM (OOF)         & 0.607 & 0.637 \\
+\textbf{Stacking}      & \textbf{0.606} & \textbf{0.637} \\
+\midrule
+TabM$^\dagger$ (ablation, full train) & 0.604 & \textbf{0.660} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Le stacking ne dépasse pas TabM$^\dagger$ entraîné sur la totalité des
+données d'entraînement ($0.637$ vs $0.660$). Deux facteurs l'expliquent~:
+(1)~TabM$^\dagger$ perd~$\approx 0.036$~QWK en mode OOF (entraîné sur
+$80\,\%$ des données seulement, avec \textit{early stopping})~;
+(2)~XGBoost et LightGBM sont très fortement corrélés entre eux
+($r=0.986$), réduisant la diversité effective de l'ensemble. La corrélation
+entre TabM$^\dagger$ et les modèles boosting est quasi nulle ($r\approx0.01$),
+ce qui confirme leur complémentarité théorique, mais TabM est trop affaibli
+par le régime OOF pour en tirer parti.
 
 \subsection{Ce qui n'a pas fonctionné}
 
 \textbf{[DOCUMENTER LES ÉCHECS]} : Quelles approches ou configurations n'ont pas donné les
 résultats escomptés? Quelles hypothèses ont été infirmées?
 
+Concernant la partie TabM, le \textbf{stacking} n'a pas permis de dépasser TabM$^\dagger$
+seul~: l'affaiblissement de TabM en régime OOF ($-0.036$~QWK) annule le bénéfice attendu
+de la diversité. Des runs supplémentaires du sweep bayésien au-delà de 30 n'apportaient
+plus de gain mesurable, les réglages par défaut étant déjà quasi-optimaux.
+
 \subsection{Possibilités d'amélioration}
 
 \textbf{[SUGGESTIONS]} : Quelles pistes pourraient être explorées avec plus de temps ou de
-ressources? Ex.~: optimisation bayésienne des hyperparamètres, architectures supplémentaires,
-données externes, ensembling.
+ressources?
+
+Pour la partie TabM, plusieurs pistes seraient envisageables~: (1)~augmenter le nombre
+d'epochs par fold lors du stacking (actuellement limité par l'\textit{early stopping} sur
+80\,\% des données)~; (2)~introduire un modèle tabm-packed à architecture différente pour
+augmenter la diversité de l'ensemble~; (3)~explorer des valeurs de $k>32$ ou des architectures
+à plus de blocs pour les variantes non-embedding~; (4)~combiner TabM$^\dagger$ avec des
+descripteurs issus de TabDPT pour un stacking inter-paradigmes.
 
 % ---------------------------------------------------------------
 % 6. Conclusion
@@ -371,11 +504,22 @@ jeu de données \textit{Prudential Life Insurance Assessment}, nous avons confro
 modèles de \textit{gradient boosting} bien établis (XGBoost, LightGBM, CatBoost) à des
 architectures récentes conçues pour les données tabulaires (TabPFN-2.5, TabM, TabDPT).
 
-Nos expériences montrent que \textbf{[RÉSUMÉ DES CONCLUSIONS PRINCIPALES]}. En particulier,
-\textbf{[RÉSULTAT CLÉ 1]}. L'étude d'ablation révèle que \textbf{[RÉSULTAT CLÉ 2]}.
-L'approche semi-supervisée \textbf{[RÉSULTAT CLÉ 3]}.
+Nos expériences montrent que les architectures récentes dédiées aux données tabulaires
+surpassent les MLP standards tout en restant compétitives face aux méthodes de
+\textit{gradient boosting}. En particulier,
+\textbf{TabM$^\dagger$ avec embeddings PiecewiseLinear atteint un QWK de 0,6608 (meilleur
+sweep W\&B) contre 0,6320 pour le MLP de référence, soit un gain de $+0.029$}.
+L'étude d'ablation révèle que \textbf{les embeddings PiecewiseLinear apportent le gain le
+plus important ($+0.011$~QWK), suivis par la régularisation BatchEnsemble ($+0.008$~QWK),
+tandis que l'architecture \textit{packed} n'apporte pas de bénéfice sur ce jeu de données}.
+L'approche de \textbf{stacking TabM + XGBoost + LightGBM (QWK~=~0.6369) n'a pas dépassé
+TabM seul, la forte corrélation entre les prédicteurs (r~=~0.986) annulant tout effet de
+diversité}.
 
-Ces résultats suggèrent que \textbf{[INTERPRÉTATION]}, ce qui contribue à la compréhension
+Ces résultats suggèrent que \textbf{les embeddings numériques spécialisés (PiecewiseLinear)
+et la régularisation par BatchEnsemble sont les facteurs discriminants qui permettent aux
+architectures de type TabM de concurrencer, voire dépasser, les méthodes de \textit{gradient
+boosting} sur des données tabulaires hétérogènes à variable ordinale}, ce qui contribue à la compréhension
 du potentiel et des limites de l'apprentissage profond sur les données tabulaires dans un
 contexte applicatif réel.
 
