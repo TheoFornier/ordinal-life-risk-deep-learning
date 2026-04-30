@@ -1,0 +1,31 @@
+{
+  "results": {
+    "TabM\u2020": {
+      "qwk_raw": 0.5935,
+      "qwk_offset": 0.6243
+    },
+    "XGBoost": {
+      "qwk_raw": 0.6111,
+      "qwk_offset": 0.6351
+    },
+    "LightGBM": {
+      "qwk_raw": 0.6073,
+      "qwk_offset": 0.637
+    },
+    "Stacking": {
+      "qwk_raw": 0.6063,
+      "qwk_offset": 0.6369
+    }
+  },
+  "weights": {
+    "tabm": 0.4,
+    "xgb": 0.3,
+    "lgb": 0.3
+  },
+  "correlations": {
+    "tabm_xgb": 0.00948911876415566,
+    "tabm_lgb": 0.012377307697578381,
+    "xgb_lgb": 0.9862420657233095
+  },
+  "elapsed_min": 55.7
+}
