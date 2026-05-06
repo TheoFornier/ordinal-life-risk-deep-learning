@@ -1,0 +1,12 @@
+torch>=2.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+matplotlib>=3.7.0
+tqdm>=4.65.0
+wandb>=0.16.0
+
+# TabM et embeddings numériques (dépôt yandex-research/tabm)
+tabm @ git+https://github.com/yandex-research/tabm.git
+rtdl-num-embeddings>=0.0.7

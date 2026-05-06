@@ -1,0 +1,7 @@
+variant_id,label,arch_type,k,n_blocks,d_block,use_embeddings,val_qwk_raw,val_qwk_offset,val_acc_raw,val_acc_offset,epochs_trained,elapsed_sec
+mlp_plain,MLP (plain),plain,1,3,512,False,0.593861,0.63217,0.254105,0.358929,16,7.2
+tabm_packed,Ensemble sans weight sharing (TabM-packed),tabm-packed,32,3,512,False,0.592865,0.636601,0.258567,0.362128,16,191.6
+tabm_mini,TabM-mini (un seul adapteur R),tabm-mini,32,3,512,False,0.592983,0.645458,0.261598,0.381746,44,479.7
+tabm,TabM (BatchEnsemble R+S+B),tabm,32,3,512,False,0.606722,0.645304,0.264966,0.361455,27,328.0
+tabm_mini_embed,TabM-mini† (+ PiecewiseLinear embedding),tabm-mini,32,2,512,True,0.60786,0.655571,0.269092,0.36979,28,386.6
+tabm_embed,TabM† (+ PiecewiseLinear embedding),tabm,32,2,512,True,0.600862,0.658051,0.259072,0.381409,40,593.9

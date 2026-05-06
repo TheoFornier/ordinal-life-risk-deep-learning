@@ -1,0 +1,12 @@
+# Install PyTorch with CUDA 12.8 support (compatible with driver 13.x):
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
+torch>=2.0
+tqdm
+pytorch-tabnet>=4.1
+tabm
+rtdl_num_embeddings
+numpy
+pandas
+matplotlib
+scikit-learn
+scipy

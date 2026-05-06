@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+wandb/
+ablation_log.txt
+rapport_partie4.html
+results/**/*.npy

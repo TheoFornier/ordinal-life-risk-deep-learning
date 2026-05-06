@@ -1,0 +1,725 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% ---------------------------------------------------------------
+% Packages
+% ---------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{multirow}
+
+% ---------------------------------------------------------------
+% Titre et auteurs
+% ---------------------------------------------------------------
+\title{Exploration d'architectures neuronales profondes pour l'évaluation du risque ordinal}
+
+\author{
+  \IEEEauthorblockN{Noé Cochet}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  noe-pierre.cochet.1@ulaval.ca}
+  \and
+  \IEEEauthorblockN{Théo Fornier}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  theo.fornier.1@ulaval.ca}
+  \and
+  \IEEEauthorblockN{Bilal Kefif}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  bilal.kefif.1@ulaval.ca}
+  \and
+  \IEEEauthorblockN{Étienne Plante-Dubé}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  etienne.plante-dube.1@ulaval.ca}
+  \and
+  \IEEEauthorblockN{Jean-Simon Ratté}
+  \IEEEauthorblockA{\textit{Dép. d'informatique et de génie logiciel}\\
+  Université Laval, Québec, Canada\\
+  jean-simon.ratte.1@ulaval.ca}
+  }
+
+\begin{document}
+
+\maketitle
+
+% ---------------------------------------------------------------
+% Résumé
+% ---------------------------------------------------------------
+\begin{abstract}
+% TODO : Rédiger le résumé en dernier, une fois les résultats obtenus.
+% Environ 150–250 mots. Doit couvrir : contexte, problème, approche, résultats principaux, conclusion.
+Ce travail explore l'application de méthodes d'apprentissage profond récentes au problème de
+classification ordinale du risque en assurance-vie, en utilisant le jeu de données \textit{Prudential Life Insurance Assessment}. Ce dataset tabulaire de 128 variables présente un défi représentatif d'un domaine traditionnellement dominé par les méthodes de \textit{gradient boosting}. Nous comparons des modèles de référence basés sur XGBoost, LightGBM et CatBoost à des architectures d'apprentissage profond récentes conçues pour les données tabulaires, notamment TabM et TabDPT. Plusieurs variantes expérimentales sont étudiées~: utilisation de données non étiquetées par pseudo-étiquetage, régularisation (Dropout, Batch Normalization, Weight Decay), et une approche \textit{teacher--student} pour l'augmentation tabulaire synthétique. Une étude d'ablation permet d'isoler la contribution des composantes clés de l'architecture sélectionnée. Les résultats montrent que \textbf{[RÉSUMÉ DES RÉSULTATS À COMPLÉTER]}.
+\end{abstract}
+
+\begin{IEEEkeywords}
+apprentissage profond, données tabulaires, classification ordinale, assurance-vie, semi-supervisé, transformer, gradient boosting
+\end{IEEEkeywords}
+
+% ---------------------------------------------------------------
+% 1. Introduction
+% ---------------------------------------------------------------
+\section{Introduction}
+
+L'évaluation du risque lors de la souscription en assurance-vie repose traditionnellement sur des longs questionnaires médicaux afin de déterminer l'égibilité aux produits. Depuis quelques années, les assureurs ont introduit des algorithmes de machine learning sur les questionnaires médicaux afin de réduire les commandes d'exigence médicales tout en minimisant le risque additionnel de mortalité. Les données recueillies dans les questionnaires médicaux comportent  de nombreuses variables médicales, comportementales et démographiques. Pour notre projet, ce processus, qui vise à attribuer une classe de risque à chaque client, constitue un problème de classification ordinale à huit niveaux.
+
+Sur ce type de données tabulaires structurées, les méthodes de \textit{gradient boosting} telles que XGBoost~\cite{chen2016xgboost}, LightGBM~\cite{ke2017lightgbm} et CatBoost~\cite{prokhorenkova2018catboost} demeurent l'état de l'art. Pourtant, l'essor récent d'architectures de réseaux de neurones profonds conçues spécifiquement pour les données tabulaires, comme les Transformers tabulaires et les modèles de fondation, laisse entrevoir un potentiel compétitif croissant pour les approches d'apprentissage profond.
+
+Ce projet réalisé dans le cadre du cours GLO-7030 vise à évaluer dans quelle mesure les avancées récentes en apprentissage profond peuvent rivaliser avec  les modèles de boosting classiques sur un problème réel de risque de mortalité en assurance-vie. Notre objectif principal est de comparer les architectures modernes d'apprentissage profond sur des données tabulaires (TabNet, TabM) combinée à une étude d'ablation sur les composantes d'entraînement, ainsi qu'une exploration de stratégies semi-supervisées et d'augmentation ainsi que la génération de données synthétiques.
+
+La suite de ce rapport est organisée comme suit~: la Section~\ref{sec:etat_art} présente l'état de l'art; la Section~\ref{sec:approche} décrit l'approche proposée; la Section~\ref{sec:methodo} détaille la méthodologie et les expérimentations; la Section~\ref{sec:resultats} présente et discute les résultats; la Section~\ref{sec:conclusion} conclut le rapport.
+
+% ---------------------------------------------------------------
+% 2. État de l'art
+% ---------------------------------------------------------------
+\section{État de l'art}
+\label{sec:etat_art}
+
+\subsection{Gradient Boosting pour les données tabulaires}
+
+Les méthodes de \textit{gradient boosting} constituent depuis plusieurs années l'approche dominante pour les tâches d'apprentissage supervisé sur données tabulaires. XGBoost~\cite{chen2016xgboost}
+introduit un cadre d'optimisation scalable avec régularisation L1/L2 intégrée. LightGBM~\cite{ke2017lightgbm} améliore l'efficacité computationnelle grâce à une construction d'arbres feuille par feuille et un échantillonnage par gradient. CatBoost~\cite{prokhorenkova2018catboost} propose un traitement natif des variables catégorielles via un encodage ordonné.
+
+\subsection{Apprentissage profond sur des données tabulaires}
+
+Plusieurs travaux récents ont tenté de combler l'écart de performance entre réseaux de
+neurones et méthodes de boosting sur les données tabulaires~\cite{grinsztajn2022tree}.
+
+\subsubsection{Modèles de fondation tabulaires}
+TabNet~\cite{hollmann2022tabpfn} est un modèle de fondation \textit{prior-fitted} entraîné sur des millions de jeux de données synthétiques, permettant une inférence en contexte sans réentraînement. La version 2.5 étendue améliore la scalabilité et la gestion de la haute dimensionnalité~\cite{hollmann2025tabpfn2}.
+
+\subsubsection{Approches d'ensemble et de mélange d'experts}
+TabM~\cite{gorishniy2024tabm} combine des réseaux MLP avec un mécanisme de mélange
+d'experts pondérés pour mieux capturer les interactions entre variables.
+
+\subsubsection{Transformers semi-supervisés}
+TabDPT~\cite{tabdpt2024} adapte l'architecture Transformer à l'apprentissage tabulaire semi-supervisé, exploitant des données non étiquetées pour améliorer les représentations apprises.
+
+\subsection{Classification ordinale}
+
+La prédiction d'une variable cible catégorique ordonnée nécessite des ajustements par rapport à la classification multiclasse standard. Parmi les approches courantes figurent la ordinal regression}~\cite{frank2001simple}, la décomposition en classifieurs binaires cumulatifs, et les fonctions de perte tenant compte de l'ordre (ex.~: \textit{Earth Mover's Distance}, loss d'ordonnancement)~\cite{TODO}.
+
+\subsection{Apprentissage semi-supervisé et augmentation tabulaire}
+
+L'apprentissage semi-supervisé pour les données tabulaires peut prendre la forme de
+pseudo-étiquetage~\cite{lee2013pseudo} ou de pré-entraînement par auto-encodage~\cite{TODO}.
+L'approche \textit{teacher--student}~\cite{hinton2015distilling} a montré son efficacité pour
+transférer la connaissance d'un modèle supervisé vers un modèle entraîné sur des données
+synthétiques ou non étiquetées.
+
+% ---------------------------------------------------------------
+% 3. Approche proposée
+% ---------------------------------------------------------------
+\section{Approche proposée}
+\label{sec:approche}
+
+\subsection{Vue d'ensemble}
+
+Notre approche suit un cadre comparatif structuré en deux volets~: (1) l'établissement de
+lignes de base avec des modèles de \textit{gradient boosting}, et (2) l'exploration
+d'architectures d'apprentissage profond récentes adaptées aux données tabulaires, avec
+plusieurs variantes expérimentales.
+
+\subsection{Description du jeu de données}
+
+Le jeu de données \textit{Prudential Life Insurance Assessment}~\cite{kaggle_prudential} est composé de \textbf{59 381} exemples d'entraînement et \textbf{19 765} exemples de test, chacun décrit par 128 variables incluant des caractéristiques médicales, comportementales et démographiques. La variable cible \texttt{Response} prend 8 valeurs ordinales ($1$ à $8$).
+La distribution des classes est \textbf{[DÉCRIRE DÉSÉQUILIBRE]}.
+
+Les variables peuvent être regroupées en~:
+\begin{itemize}
+  \item Variables continues (ex.~: \texttt{Ht}, \texttt{Wt}, \texttt{BMI})~;
+  \item Variables catégorielles à haute cardinalité (ex.~: \texttt{Product\_Info\_2})~;
+  \item Variables binaires de conditions médicales (ex.~: \texttt{Medical\_History\_*})~;
+  \item Variables avec valeurs manquantes (ex.~: \texttt{Employment\_Info\_*}).
+\end{itemize}
+
+\subsection{Prétraitement}
+
+\textbf{[DÉCRIRE LE PRÉTRAITEMENT]} : normalisation, encodage des variables catégorielles (ex.~: ordinal encoding, target encoding, embeddings), imputation des valeurs manquantes, gestion des variables fortement corrélées.
+
+\subsection{Modèles de référence (\textit{Gradient Boosting})}
+
+Nous entraînons trois modèles de référence avec optimisation des hyperparamètres par
+validation croisée~:
+\begin{itemize}
+  \item \textbf{XGBoost}~\cite{chen2016xgboost}~: \textbf{[HYPERPARAMÈTRES CLÉS]}~;
+  \item \textbf{LightGBM}~\cite{ke2017lightgbm}~: \textbf{[HYPERPARAMÈTRES CLÉS]}~;
+  \item \textbf{CatBoost}~\cite{prokhorenkova2018catboost}~: \textbf{[HYPERPARAMÈTRES CLÉS]}.
+\end{itemize}
+
+\subsection{Architectures d'apprentissage profond}
+
+\subsubsection{TabNet}
+\textbf{[DÉCRIRE L'UTILISATION DE TABNET]} : configuration, adaptation au problème
+ordinal, limites de scalabilité rencontrées.
+
+\subsubsection{TabM}
+TabM~\cite{gorishniy2024tabm} repose sur un mécanisme de \textit{BatchEnsemble} appliqué
+à chaque couche linéaire d'un MLP standard. Pour chaque couche, $k$ adaptateurs légers
+(scalaires d'entrée $r_i$, de sortie $s_i$ et de biais $b_i$, avec $i \in \{1,\ldots,k\}$)
+transforment le flux d'information de façon indépendante, créant ainsi $k$ représentations
+parallèles qui partagent néanmoins les mêmes poids principaux. Cette architecture permet
+d'obtenir la diversité d'un ensemble de $k$ modèles tout en conservant un coût
+paramétrique quasi-identique à un MLP seul.
+
+Nous explorons quatre variantes issues de l'article~:
+\begin{itemize}
+  \item \textbf{plain} (MLP de base, sans ensemble)~;
+  \item \textbf{tabm-packed} (ensemble de $k$ MLPs indépendants, sans partage de poids)~;
+  \item \textbf{tabm-mini} (adapteur $R$ uniquement, un seul scalaire par membre)~;
+  \item \textbf{tabm} (adapteurs $R$, $S$ et $B$ combinés, variante complète).
+\end{itemize}
+
+Les variantes notées TabM$^\dagger$ dans l'article ajoutent des embeddings
+\textit{PiecewiseLinear}~\cite{gorishniy2022embeddings} en entrée, qui discrétisent chaque
+variable continue en $B$ intervalles avant de la projeter dans un espace continu de
+dimension $d_e$, améliorant significativement la modélisation des non-linéarités.
+
+\subsubsection{TabDPT}
+\textbf{[DÉCRIRE L'UTILISATION DE TABDPT]} : exploitation des données non étiquetées,
+stratégie de pré-entraînement.
+
+\subsection{Gestion de l'ordinalité}
+
+Pour adapter les modèles de deep learning à la nature ordinale de la cible
+(8~classes ordonnées, $y \in \{1, \ldots, 8\}$), nous adoptons une
+approche de \textbf{régression ordinale continue} plutôt qu'une classification multi-classes standard.
+
+
+La tête de sortie des deux modèles produit un scalaire réel ($d_{\text{out}}=1$).
+La variable cible est standardisée avant l'entraînement :
+\begin{equation}
+  \tilde{y} = \frac{y - \mu_y}{\sigma_y},
+\end{equation}
+où $\mu_y$ et $\sigma_y$ sont estimés sur l'ensemble d'entraînement. 
+À l'inférence, la prédiction est dénormalisée puis arrondie à la classe ordinale
+la plus proche.
+ 
+TabNet utilise la MSE comme fonction de perte. TabM, en revanche,
+optimise directement la métrique d'évaluation via une approximation
+différentiable du \textit{Quadratic Weighted Kappa} (QWK) : la soft-QWK
+ 
+Le QWK est défini à partir d'une matrice de pondération quadratique qui pénalise
+les erreurs proportionnellement à leur écart ordinal :
+\begin{equation}
+  W_{ij} = \frac{(i - j)^2}{(K-1)^2}, \quad i, j \in \{1, \ldots, K\}.
+\end{equation}
+ 
+La soft-QWK, utilisant une softmax pour gérer sa distribution, permet l'utilisation d'un hyperparamètre de température $\tau$ pour déterminer la netteté de la distribution sur les classes : un $\tau$ faible place presque tout le poids sur la classe la plus proche, un $\tau$ élevé l'étale sur les classes voisiness.
+ 
+Dans les deux cas, l'early stopping est piloté par le
+QWK mesuré sur le jeu de données de validation à chaque époque.
+
+\subsection{Utilisation de données synthétiques}
+
+Dans le cadre de la prédiction du niveau de risque en assurance à partir de données tabulaires, nous avons été confrontés à plusieurs limitations classiques : taille de dataset limitée, déséquilibre entre classes et difficulté à modéliser des relations complexes entre variables.
+
+Les modèles de deep learning sont sensibles à la quantité de données disponibles \cite{goodfellow2016deep}. Leur performance tend à augmenter avec le volume de données d’entraînement, contrairement à certains modèles tabulaires classiques (comme les méthodes de boosting), souvent plus robustes en régime de faible donnée.
+
+Afin de pallier ces limitations, nous avons choisi d’explorer l’utilisation de données synthétiques pour enrichir le dataset initial.
+
+Notre approche repose sur un pipeline structuré en plusieurs étapes :
+
+\begin{enumerate}
+    \item Analyse du dataset initial (types de variables, distributions, corrélations)
+    \item Génération de données synthétiques conditionnées sur certaines classes
+    \item Évaluation de la cohérence des données générées
+    \item Augmentation du dataset réel
+    \item Entraînement et comparaison des modèles
+\end{enumerate}
+
+Plusieurs modèles génératifs adaptés aux données tabulaires ont été étudiés.\\
+
+\subsubsection{\textbf{CTGAN}}
+
+Le modèle CTGAN \cite{xu2019modeling} est une extension des GANs spécifiquement conçue pour les données tabulaires. Il permet de gérer les variables mixtes (numériques et catégorielles) via un mécanisme de conditionnement.
+
+Nous avons utilisé CTGAN afin de générer des données synthétiques conditionnées par classe, dans le but de mieux modéliser les distributions spécifiques à chaque classe.\\
+
+\subsubsection{\textbf{TVAE}}
+
+Le modèle TVAE (Tabular Variational Autoencoder) \cite{xu2019modeling} repose sur une approche probabiliste permettant de modéliser la distribution jointe des variables.
+
+La même stratégie de génération conditionnée par classe a été appliquée avec TVAE.\\
+
+\subsubsection{\textbf{TabSyn}}
+
+Nous avons également expérimenté TabSyn \cite{zhang2024tabsyn}, une approche basée sur des modèles de diffusion en espace latent pour la génération de données tabulaires. L’implémentation utilisée provient du dépôt officiel, que nous avons cloné et adapté à notre dataset.
+
+Cette approche permet également une génération conditionnée, afin de capturer des distributions spécifiques selon les classes.\\
+
+\subsubsection{\textbf{Génération via LLM}}
+
+Nous avons également exploré l’utilisation de modèles de langage (LLM) pour la génération de données tabulaires, en les utilisant comme générateurs conditionnels à partir de prompts structurés décrivant le format et les contraintes du dataset.
+
+Cette approche permet de produire des données synthétiques en contrôlant explicitement certaines caractéristiques via le prompt, notamment la classe cible et la structure des variables.
+
+Plusieurs modèles ont été testés, notamment GPT-5.3 Pro et Gemini 3.1 Pro. Parmi ceux-ci, GPT-5.3 Pro a produit les résultats les plus satisfaisants dans notre cadre expérimental, comparativement aux autres modèles évalués.\\
+
+\subsubsection{\textbf{Diffusion pour données tabulaires}}
+
+Nous avons également exploré des approches basées sur les modèles de diffusion, telles que TabDDPM \cite{kotelnikov2023tabddpm}, qui reposent sur un processus de débruitage progressif pour générer les données.
+
+Cependant, des contraintes liées aux dépendances logicielles et à la compatibilité de certaines bibliothèques ont limité leur implémentation dans notre cadre expérimental.
+
+
+% ---------------------------------------------------------------
+% 4. Méthodologie et expérimentation
+% ---------------------------------------------------------------
+\section{Méthodologie et expérimentation}
+\label{sec:methodo}
+
+\subsection{Protocole d'évaluation}
+
+Tous les modèles sont évalués selon les métriques suivantes~:
+\begin{itemize}
+  \item \textbf{Cohen's Kappa quadratique pondéré (QWK)}~: métrique principale du concours Kaggle~;
+  \item \textbf{Accuracy}~: taux de classification exacte~;
+  \item \textbf{MAE ordinal}~: erreur absolue moyenne sur les niveaux de risque.
+\end{itemize}
+
+Nous utilisons une validation croisée stratifiée à $k=5$ plis pour tous les modèles supervisés.
+Les résultats sur le jeu de test Kaggle sont obtenus via soumission.
+
+\subsection{Détails d'entraînement}
+
+\textbf{[COMPLÉTER POUR CHAQUE MODÈLE]}~:
+\begin{itemize}
+  \item Matériel utilisé (GPU/CPU, mémoire)~;
+  \item Optimiseur (ex.~: Adam, AdamW), taux d'apprentissage, scheduler~;
+  \item Nombre d'époques, \textit{early stopping}~;
+  \item Taille de lot (\textit{batch size})~;
+  \item Initialisation des poids.
+\end{itemize}
+
+
+\subsection{Méthodologie de génération des données synthétiques}
+
+Pour chaque méthode de génération (CTGAN, TVAE, TabSyn), nous avons adopté une approche basée sur une spécialisation par classe. Le dataset d’entraînement est séparé selon la variable cible, et un modèle distinct est entraîné pour chaque classe. Ainsi, un total de 8 modèles est entraîné par méthode, chacun apprenant la distribution spécifique d’une classe donnée.
+
+Cette approche permet de générer des données conditionnées de manière explicite, en contrôlant directement la classe cible via le modèle utilisé lors de la génération.\\
+
+\subsubsection{Stratégies de génération}\mbox{}
+
+Plusieurs stratégies ont été mises en place afin d’évaluer l’impact de l’ajout de données synthétiques.\\
+
+\paragraph{Stratégie A : génération ciblée}\mbox{}
+
+La stratégie A consiste à générer des données uniquement pour les classes sous-représentées. Le nombre d’exemples à générer est déterminé à partir de la distribution initiale des classes, en appliquant un ratio défini. Les classes sous-représentées sont augmentées jusqu’à atteindre 50\% de la taille de la classe majoritaire. Cette stratégie vise à réduire le déséquilibre du dataset sans modifier fortement la distribution globale.
+
+Pour chaque classe sélectionnée, le modèle correspondant est chargé, puis un nombre spécifique d’échantillons est généré. Les données synthétiques produites sont ensuite :
+\begin{itemize}
+    \item associées explicitement à leur classe cible,
+    \item dotées de nouveaux identifiants afin d’éviter tout conflit avec les données réelles,
+    \item réorganisées pour correspondre exactement à la structure du dataset original.
+\end{itemize}
+
+Les données générées pour chaque classe sont sauvegardées séparément, puis concaténées pour former un dataset synthétique global. Enfin, ce dataset est fusionné avec les données réelles afin de produire un dataset augmenté.\\
+
+\paragraph{Stratégie B : génération pour équilibrage complet}\mbox{}
+
+La stratégie B vise à générer des données synthétiques pour toutes les classes afin d’obtenir un dataset équilibré. Le nombre d’exemples générés pour chaque classe est calculé de manière à atteindre un effectif similaire entre classes.
+
+Le processus de génération est identique à celui de la stratégie A :
+\begin{itemize}
+    \item chargement du modèle associé à chaque classe,
+    \item génération du nombre requis d’échantillons,
+    \item attribution de nouveaux identifiants,
+    \item alignement de la structure avec le dataset réel.
+\end{itemize}
+
+Les données synthétiques sont ensuite concaténées et fusionnées avec le dataset initial afin de produire une version entièrement équilibrée du dataset d’entraînement.
+
+\paragraph{Stratégie C : classes 1 et 2}
+
+La stratégie C consiste à cibler les classes pour lesquelles le modèle d’apprentissage profond présente le plus d’erreurs de prédiction, en l’occurrence les classes 1 et 2.
+
+L’objectif est d’améliorer la performance du modèle sur ces classes en générant 20000 lignes de données pour ces 2 classes. Pour cela, des échantillons sont générés spécifiquement pour ces classes à l’aide des modèles correspondants.
+
+Comme pour les autres stratégies, les données synthétiques sont ensuite associées à leur classe cible, dotées de nouveaux identifiants et alignées avec la structure du dataset réel, avant d’être fusionnées avec les données d’origine.
+
+\paragraph{Stratégie D : classes 4, 6 et 7}
+
+La stratégie D repose sur le même principe, en ciblant les classes 4, 6 et 7, identifiées comme présentant un intérêt particulier en termes de performance du modèle.
+
+Des données synthétiques sont générées spécifiquement pour ces classes afin d’enrichir leur représentation dans le dataset. Le processus de génération et d’intégration est identique à celui des autres stratégies : génération conditionnée par classe, attribution de nouveaux identifiants et fusion avec le dataset réel.
+
+
+\subsection{Variantes expérimentales}
+
+\subsubsection{Expérience 1 : Comparaison des modèles de base}
+Comparaison directe de tous les modèles dans leur configuration standard sur les données
+d'entraînement avec prétraitement minimal.
+
+\subsubsection{Expérience 2 : Régularisation}
+Évaluation de l'impact de différentes techniques de régularisation sur le modèle DL retenu~:
+Dropout ($p \in \{0.1, 0.3, 0.5\}$), Batch Normalization, Weight Decay
+($\lambda \in \{10^{-4}, 10^{-3}, 10^{-2}\}$).
+
+\subsubsection{Expérience 3 : Utilisation des données non étiquetées}
+Exploitation des données de test (sans étiquettes) via pseudo-étiquetage et/ou pré-entraînement
+par auto-encodage pour améliorer les représentations apprises.
+
+\subsubsection{Expérience 4 : Approche \textit{Teacher--Student} avec augmentation synthétique}
+Un modèle enseignant (\textit{teacher}) entraîné sur les données réelles génère des
+pseudo-étiquettes sur un grand volume de données synthétiques. Le modèle élève (\textit{student})
+est pré-entraîné sur ces données augmentées, puis affiné (\textit{fine-tuned}) sur les données
+originales.
+
+\subsubsection{Expérience 5 : Étude d'ablation TabM}
+Nous isolons la contribution de chaque composante de TabM sur le jeu de données Prudential.
+Six variantes sont entraînées dans des conditions identiques~: même optimiseur AdamW,
+scheduler CosineAnnealingLR, \textit{early stopping} à patience~$=10$, $k=32$ membres,
+3~blocs de dimension~512 (2~blocs pour les variantes avec embeddings, conformément à
+l'article). Un sweep bayésien via Weights \& Biases explore ensuite l'espace des
+hyperparamètres de la meilleure variante (30~configurations, optimisation du QWK).
+Enfin, un \textit{stacking} combinant TabM$^\dagger$, XGBoost et LightGBM est évalué
+en validation croisée à 5~plis.
+
+% ---------------------------------------------------------------
+% 5. Résultats et Discussion
+% ---------------------------------------------------------------
+\section{Résultats et Discussion}
+\label{sec:resultats}
+
+\subsection{Comparaison globale des modèles}
+
+\begin{table}[htbp]
+\caption{Comparaison des performances des modèles sur la validation croisée ($k=5$)}
+\label{tab:resultats_globaux}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Modèle} & \textbf{QWK} & \textbf{Accuracy} & \textbf{MAE} \\
+\midrule
+XGBoost          & -- & -- & -- \\
+LightGBM         & -- & -- & -- \\
+CatBoost         & -- & -- & -- \\
+TabPFN-2.5       & -- & -- & -- \\
+TabM$^\dagger$   & 0.630 & \textbf{0.6608} & -- \\
+TabDPT           & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+TabM$^\dagger$ (avec embeddings PiecewiseLinear, optimisation bayésienne sur 30 runs W\&B)
+atteint un QWK de \textbf{0,6608} sur l'ensemble de validation, soit le meilleur score
+toutes architectures confondues. À titre de comparaison, le MLP de référence plafonne à
+0,632. L'apprentissage profond spécialisé pour les données tabulaires (TabM) rivalise donc
+avec les meilleures méthodes de \textit{gradient boosting} sur ce problème de régression ordinale.
+
+\subsection{Impact de la régularisation}
+
+\begin{table}[htbp]
+\caption{Impact des techniques de régularisation sur le modèle retenu}
+\label{tab:regularisation}
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{QWK (val.)} & \textbf{QWK (test)} \\
+\midrule
+Sans régularisation & -- & -- \\
+Dropout ($p=0.1$)   & -- & -- \\
+Dropout ($p=0.3$)   & -- & -- \\
+Batch Normalization & -- & -- \\
+Weight Decay ($10^{-3}$) & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Semi-supervisé et données non étiquetées}
+
+\textbf{[DÉCRIRE ET ANALYSER LES RÉSULTATS]} : L'ajout des données non étiquetées a-t-il
+amélioré les performances? Dans quelle mesure?
+
+\subsection{Comparaison des méthodes de génération de données synthétiques}
+
+Une première comparaison des différentes méthodes de génération de données synthétiques est réalisée à partir des métriques présentées dans le Tableau~X, l'objectif étiait d'évalué la qualité .
+
+
+Plusieurs métriques ont été utilisées afin d’évaluer la qualité des données synthétiques, à la fois du point de vue de leur utilité pour un modèle en aval et de leur similarité avec les données réelles.\\
+
+\paragraph{QWK (Quadratic Weighted Kappa)}
+
+Le QWK mesure l’accord entre les prédictions du modèle et les vraies classes, en tenant compte de la nature ordinale de la variable cible. Il est défini comme :
+
+\[
+\kappa = 1 - \frac{\sum_{i,j} w_{i,j} O_{i,j}}{\sum_{i,j} w_{i,j} E_{i,j}}
+\]
+
+où $O$ est la matrice de confusion observée, $E$ la matrice attendue, et $w_{i,j}$ un poids quadratique pénalisant davantage les erreurs éloignées.
+
+Nous reportons :
+\begin{itemize}
+    \item le QWK sur données réelles seules (baseline),
+    \item le QWK après augmentation,
+    \item $\Delta$QWK = gain apporté par les données synthétiques.\\
+\end{itemize}
+
+\paragraph{AUC réel vs synthétique}
+
+Cette métrique mesure la capacité d’un classifieur à distinguer les données réelles des données synthétiques. Un modèle est entraîné pour prédire si une ligne est réelle ou synthétique, puis on calcule l’AUC.
+
+\begin{itemize}
+    \item AUC proche de 0.5 : les données synthétiques sont difficiles à distinguer (bon signe)
+    \item AUC élevée : les données synthétiques sont facilement détectables \\
+\end{itemize}
+
+\paragraph{Quality Report (SDMetrics)}
+
+Un rapport de qualité est calculé à l’aide de SDMetrics, basé sur trois composantes :
+
+\begin{itemize}
+    \item \textbf{Quality overall} : score global de similarité
+    \item \textbf{Column shapes} : similarité des distributions marginales
+    \item \textbf{Column pair trends} : préservation des corrélations entre variables
+\end{itemize}
+
+\begin{table}[h]
+\centering
+\resizebox{0.3\textwidth}{!}{
+\begin{tabular}{lcc}
+\hline
+Modèle & $\Delta$ QWK & Quality \\
+\hline
+GPT (LLM) & \textbf{+0.1419} & 0.9586 \\
+TabSyn & +0.0093 & 0.9231 \\
+CTGAN & -0.0235 & 0.8757 \\
+TVAE & -0.0204 & 0.8884 \\
+\hline
+\end{tabular}
+}
+\caption{Comparaison des méthodes de génération (stratégie B)}
+\end{table}
+
+Dans un premier temps, nous avons évalué différentes méthodes de génération de données synthétiques selon plusieurs stratégies, en analysant leur impact sur l’entraînement de modèles de deep learning. Le Tableau~3 présente une première comparaison pour la stratégie B.
+
+Ces résultats constituent des observations préliminaires. On observe des écarts de performance entre les différentes méthodes, notamment en termes de $\Delta$QWK et de qualité des données générées.
+
+
+Plus précisément, le modèle GPT présente un gain de performance significativement plus élevé que les autres approches. TabSyn montre une amélioration plus modérée, tandis que CTGAN et TVAE conduisent à une dégradation des performances dans ce cadre expérimental.
+
+Il est intéressant de noter que les modèles de langage (LLM), (ici GPT-5.3 Pro), semblent obtenir de meilleures performances que des modèles spécifiquement conçus pour la génération de données tabulaires, malgré l’utilisation d’une approche basée uniquement sur le prompting.
+
+Dans un second temps, plusieurs stratégies de génération ont été explorées avec différents modèles afin d’analyser plus finement leur impact sur l’entraînement et les performances en conditions réelles. Ces analyses sont détaillées dans les sections suivantes.
+
+\subsection{Comparaison des performances des modèles de deep learning sur données réelles et données synthétiques}
+
+
+\textbf{[tableau + explication a complété]}
+
+\subsection{Approche Teacher--Student}
+
+Nous avons ensuite décidé de travailler sur une approche teacher-student à partir de données synthétiques non labellisées. En effet, il peut être plus simple de générer des données synthétiques sans label que de produire directement des exemples annotés de manière fiable.
+
+Dans cette approche, un modèle teacher est d’abord entraîné sur le dataset réel labellisé. Il est ensuite utilisé pour prédire des pseudo-labels sur les données synthétiques non labellisées. Ces pseudo-labels servent alors à construire un nouveau dataset d’entraînement, composé à la fois de données réelles labellisées et de données synthétiques pseudo-labellisées.
+
+Le modèle student est finalement entraîné sur ce dataset augmenté. L’objectif est d’exploiter un plus grand volume de données tout en transférant l’information apprise par le teacher vers un modèle entraîné sur une distribution plus large.
+
+
+\subsection{Étude d'ablation TabM}
+
+\subsubsection{Protocole}
+Six variantes de TabM sont entraînées sur \textit{Prudential} ($N=59\,381$,
+$d=130$~variables numériques après nettoyage) avec une division
+80\,\%\,/\,20\,\% entraînement\,/\,validation stratifiée. L'optimiseur est
+AdamW ($\eta=10^{-3}$, $\lambda=10^{-3}$), avec scheduler
+\texttt{CosineAnnealingLR} et \textit{early stopping} à patience~$=10$.
+La taille de lot est~$1024$; les variantes $\dagger$ utilisent $B=48$ intervalles
+et $d_e=16$ (embeddings PiecewiseLinear). Les prédictions continues sont post-traitées
+par optimisation d'offsets par classe, qui maximise le QWK sans ré-entraînement.
+
+\subsubsection{Résultats}
+
+\begin{table}[htbp]
+\caption{Résultats de l'ablation TabM sur \textit{Prudential} (validation)}
+\label{tab:ablation_tabm}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Variante} & \textbf{arch} & \textbf{Embed.} &
+\textbf{QWK\textsubscript{brut}} & \textbf{QWK\textsubscript{+off.}} \\
+\midrule
+MLP plain (baseline)    & plain      & --  & 0.594 & 0.632 \\
+TabM-packed             & tabm-packed & --  & 0.593 & 0.637 \\
+TabM-mini               & tabm-mini  & --  & 0.593 & 0.645 \\
+TabM                    & tabm       & --  & 0.607 & 0.645 \\
+TabM-mini$^\dagger$     & tabm-mini  & PL  & 0.608 & 0.656 \\
+\textbf{TabM$^\dagger$} & \textbf{tabm} & \textbf{PL} &
+\textbf{0.604} & \textbf{0.660} \\
+\bottomrule
+\multicolumn{5}{l}{\footnotesize PL~: PiecewiseLinear embeddings.}
+\end{tabular}
+\end{table}
+
+L'ordre de performance est conforme aux prédictions de l'article~:
+TabM-packed~$<$~TabM-mini~$<$~TabM~$<$~TabM-mini$^\dagger$~$<$~TabM$^\dagger$.
+Le gain des embeddings PiecewiseLinear est le plus significatif ($+0.011$~QWK),
+confirmant que la modélisation explicite des non-linéarités numériques est le
+facteur clé sur ce jeu de données. L'optimisation des offsets apporte
+systématiquement $+0.05$~QWK sans aucun ré-entraînement.
+
+\subsubsection{Sweep bayésien}
+
+Un sweep bayésien (Weights \& Biases, 30~runs) est conduit sur la variante
+TabM$^\dagger$ pour optimiser les hyperparamètres
+$\eta$, $\lambda$, \textit{dropout}, $B$, $d_e$, $n_{\text{blocs}}$.
+Le meilleur run (\texttt{wise-sweep-22}) atteint un QWK de~$\mathbf{0.6608}$
+avec la configuration~: $\eta=1.12\times10^{-3}$, $\lambda=3.37\times10^{-4}$,
+\textit{dropout}~$=0.229$, $B=48$, $d_e=32$, $n_{\text{blocs}}=3$.
+La substitution de $d_e=16$ (valeur par défaut) par $d_e=32$ est le seul
+changement substantiel, expliquant l'essentiel du gain de~$+0.001$.
+
+\begin{table}[htbp]
+\caption{Top-5 runs du sweep bayésien (TabM$^\dagger$)}
+\label{tab:sweep}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Run} & \textbf{QWK\textsubscript{+off.}} & $\boldsymbol{\eta}$ &
+$\boldsymbol{d_e}$ & $n_b$ \\
+\midrule
+wise-sweep-22    & \textbf{0.6608} & $1.12\times10^{-3}$ & 32 & 3 \\
+mild-sweep-18    & 0.6605 & $5.67\times10^{-4}$ & 32 & 3 \\
+blooming-sweep-10 & 0.6591 & $8.23\times10^{-4}$ & 8  & 3 \\
+avid-sweep-7     & 0.6590 & $1.46\times10^{-3}$ & 32 & 2 \\
+lyric-sweep-24   & 0.6590 & $7.48\times10^{-4}$ & 8  & 3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Ensemble stacking}
+
+Afin d'explorer si la combinaison de modèles hétérogènes peut dépasser
+TabM$^\dagger$ seul, nous entraînons un ensemble par \textit{stacking}
+à deux niveaux en validation croisée stratifiée ($k=5$)~:
+\begin{itemize}
+  \item \textbf{Niveau~0}~: TabM$^\dagger$ (hyperparamètres sweep optimaux),
+        XGBoost ($n_\text{est}=800$, $\eta=0.05$, \textit{depth}=6),
+        LightGBM ($n_\text{est}=800$, $\eta=0.05$, 63~feuilles)~;
+  \item \textbf{Niveau~1}~: moyenne pondérée optimisée ($w_{\text{TabM}}=0.4$,
+        $w_{\text{XGB}}=0.3$, $w_{\text{LGB}}=0.3$) suivie d'une optimisation
+        des offsets.
+\end{itemize}
+
+\begin{table}[htbp]
+\caption{Résultats du stacking en validation croisée OOF ($k=5$)}
+\label{tab:stacking}
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Modèle} & \textbf{QWK\textsubscript{brut}} &
+\textbf{QWK\textsubscript{+off.}} \\
+\midrule
+TabM$^\dagger$ (OOF)   & 0.594 & 0.624 \\
+XGBoost (OOF)          & 0.611 & 0.635 \\
+LightGBM (OOF)         & 0.607 & 0.637 \\
+\textbf{Stacking}      & \textbf{0.606} & \textbf{0.637} \\
+\midrule
+TabM$^\dagger$ (ablation, full train) & 0.604 & \textbf{0.660} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Le stacking ne dépasse pas TabM$^\dagger$ entraîné sur la totalité des
+données d'entraînement ($0.637$ vs $0.660$). Deux facteurs l'expliquent~:
+(1)~TabM$^\dagger$ perd~$\approx 0.036$~QWK en mode OOF (entraîné sur
+$80\,\%$ des données seulement, avec \textit{early stopping})~;
+(2)~XGBoost et LightGBM sont très fortement corrélés entre eux
+($r=0.986$), réduisant la diversité effective de l'ensemble. La corrélation
+entre TabM$^\dagger$ et les modèles boosting est quasi nulle ($r\approx0.01$),
+ce qui confirme leur complémentarité théorique, mais TabM est trop affaibli
+par le régime OOF pour en tirer parti.
+
+\subsection{Ce qui n'a pas fonctionné}
+
+\textbf{[DOCUMENTER LES ÉCHECS]} : Quelles approches ou configurations n'ont pas donné les
+résultats escomptés? Quelles hypothèses ont été infirmées?
+
+Concernant la partie TabM, le \textbf{stacking} n'a pas permis de dépasser TabM$^\dagger$
+seul~: l'affaiblissement de TabM en régime OOF ($-0.036$~QWK) annule le bénéfice attendu
+de la diversité. Des runs supplémentaires du sweep bayésien au-delà de 30 n'apportaient
+plus de gain mesurable, les réglages par défaut étant déjà quasi-optimaux.
+
+\subsection{Possibilités d'amélioration}
+
+\textbf{[SUGGESTIONS]} : Quelles pistes pourraient être explorées avec plus de temps ou de
+ressources?
+
+Pour la partie TabM, plusieurs pistes seraient envisageables~: (1)~augmenter le nombre
+d'epochs par fold lors du stacking (actuellement limité par l'\textit{early stopping} sur
+80\,\% des données)~; (2)~introduire un modèle tabm-packed à architecture différente pour
+augmenter la diversité de l'ensemble~; (3)~explorer des valeurs de $k>32$ ou des architectures
+à plus de blocs pour les variantes non-embedding~; (4)~combiner TabM$^\dagger$ avec des
+descripteurs issus de TabDPT pour un stacking inter-paradigmes.
+
+% ---------------------------------------------------------------
+% 6. Conclusion
+% ---------------------------------------------------------------
+\section{Conclusion}
+
+Ce projet a présenté une exploration comparative d'architectures d'apprentissage profond
+modernes appliquées à l'évaluation du risque ordinal en assurance-vie. En utilisant le
+jeu de données \textit{Prudential Life Insurance Assessment}, nous avons confronté des
+modèles de \textit{gradient boosting} bien établis (XGBoost, LightGBM, CatBoost) à des
+architectures récentes conçues pour les données tabulaires (TabNet, TabM).
+
+Nos expériences montrent que les architectures récentes dédiées aux données tabulaires
+surpassent les MLP standards tout en restant compétitives face aux méthodes de
+\textit{gradient boosting}. En particulier,
+\textbf{TabM$^\dagger$ avec embeddings PiecewiseLinear atteint un QWK de 0,6608 (meilleur
+sweep W\&B) contre 0,6320 pour le MLP de référence, soit un gain de $+0.029$}.
+L'étude d'ablation révèle que \textbf{les embeddings PiecewiseLinear apportent le gain le
+plus important ($+0.011$~QWK), suivis par la régularisation BatchEnsemble ($+0.008$~QWK),
+tandis que l'architecture \textit{packed} n'apporte pas de bénéfice sur ce jeu de données}.
+L'approche de \textbf{stacking TabM + XGBoost + LightGBM (QWK~=~0.6369) n'a pas dépassé
+TabM seul, la forte corrélation entre les prédicteurs (r~=~0.986) annulant tout effet de
+diversité}.
+
+Ces résultats suggèrent que \textbf{les embeddings numériques spécialisés (PiecewiseLinear)
+et la régularisation par BatchEnsemble sont les facteurs discriminants qui permettent aux
+architectures de type TabM de concurrencer, voire dépasser, les méthodes de \textit{gradient
+boosting} sur des données tabulaires hétérogènes à variable ordinale}, ce qui contribue à la compréhension
+du potentiel et des limites de l'apprentissage profond sur les données tabulaires dans un
+contexte applicatif réel.
+
+% ---------------------------------------------------------------
+% 7. Utilisation de l'IA générative
+% ---------------------------------------------------------------
+\section{Utilisation de l'IA générative}
+
+\textbf{[COMPLÉTER CETTE SECTION CONFORMÉMENT AUX DIRECTIVES]}
+
+Dans le cadre de ce projet, nous avons eu recours à des outils d'IA générative pour les
+usages suivants~:
+
+\begin{itemize}
+  \item \textbf{Génération de code}~: \textbf{[DÉCRIRE]}, notamment pour les fonctions
+        \texttt{[NOMS DES FONCTIONS]}. Exemples de prompts utilisés~: \textit{``[PROMPT 1]''},
+        \textit{``[PROMPT 2]''}.
+  \item \textbf{Lissage grammatical}~: Les sections \textbf{[NOMS DES SECTIONS]} ont été
+        relues et corrigées avec l'aide de \textbf{[OUTIL]}.
+\end{itemize}
+
+% OU, si aucun usage :
+% Nous n'avons pas eu recours à des outils d'IA générative dans la rédaction de ce rapport
+% ni dans la génération du code associé à ce projet.
+
+% ---------------------------------------------------------------
+% Références
+% ---------------------------------------------------------------
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
